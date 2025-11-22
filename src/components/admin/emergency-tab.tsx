@@ -43,6 +43,7 @@ export function EmergencyTab() {
     if (!firestore) return;
     
     const bookingRef = doc(firestore, 'friendsBookings', bookingId);
+    let bookingData: FriendsBooking | null = null;
 
     try {
         await runTransaction(firestore, async (transaction) => {
@@ -50,7 +51,7 @@ export function EmergencyTab() {
             if (!bookingDoc.exists()) {
                 throw "Booking document does not exist!";
             }
-            const bookingData = bookingDoc.data() as FriendsBooking;
+            bookingData = bookingDoc.data() as FriendsBooking;
 
             // Only perform station updates if approving a standard booking
             if (newStatus === 'approved' && bookingData.type === 'standard') {
@@ -63,7 +64,7 @@ export function EmergencyTab() {
 
                 const stationData = stationDoc.data() as Station;
                 const slots = stationData.slots;
-                const slotIndex = slots.findIndex(s => s.id === bookingData.slotId);
+                const slotIndex = slots.findIndex(s => s.id === bookingData!.slotId);
 
                 if (slotIndex === -1) {
                     throw `Slot ${bookingData.slotId} not found in station.`;
@@ -86,7 +87,17 @@ export function EmergencyTab() {
             transaction.update(bookingRef, { status: newStatus });
         });
 
-        toast({ title: "Success", description: `Booking status updated to ${newStatus}.` });
+        if (bookingData) {
+            toast({ 
+                title: `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
+                description: `Please notify the user at ${bookingData.phoneNumber}.`,
+                variant: 'default',
+                className: 'bg-accent text-accent-foreground border-accent',
+            });
+        } else {
+             toast({ title: "Success", description: `Booking status updated to ${newStatus}.` });
+        }
+
 
     } catch (error: any) {
         console.error("Transaction failed: ", error);
@@ -265,3 +276,5 @@ export function EmergencyTab() {
     </div>
   );
 }
+
+    

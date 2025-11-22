@@ -280,10 +280,20 @@ export default function FriendsBookingPage() {
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
             {station.slots?.slice(0, 2).map(slot => (
-              <Card key={slot.id} className={cn("p-4 flex flex-col gap-4", { "bg-muted/30 border-dashed": slot.status !== 'available' })}>
+              <Card key={slot.id} className={cn("p-4 flex flex-col gap-4", { 
+                  "bg-muted/30 border-dashed": slot.status !== 'available' && slot.status !== 'occupied',
+                  "border-destructive/50": slot.status === 'occupied'
+                })}>
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold">Slot {slot.id.split('-')[1]}</h4>
-                  <Badge variant={slot.status === 'available' ? 'secondary' : 'destructive'} className={cn({ "bg-accent text-accent-foreground": slot.status === 'available' })}>{slot.status}</Badge>
+                  <Badge variant={slot.status === 'available' ? 'secondary' : 'destructive'} 
+                         className={cn({ 
+                            "bg-accent text-accent-foreground": slot.status === 'available',
+                            "bg-destructive text-destructive-foreground": slot.status === 'occupied',
+                            "bg-muted text-muted-foreground": slot.status === 'unavailable',
+                          })}>
+                      {slot.status}
+                  </Badge>
                 </div>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <div className="flex items-center gap-2"><Plug className="size-4" /> {slot.charger.connector}</div>
@@ -291,7 +301,9 @@ export default function FriendsBookingPage() {
                   <div className="flex items-center gap-2"><Power className="size-4" /> {slot.charger.power}</div>
                 </div>
                 <BookingDialog slot={slot} stationId={station.id}>
-                    <Button className="w-full" disabled={slot.status !== 'available'}>Book Slot</Button>
+                    <Button className="w-full" disabled={slot.status !== 'available'}>
+                        {slot.status === 'occupied' ? 'Occupied' : 'Book Slot'}
+                    </Button>
                 </BookingDialog>
               </Card>
             ))}

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { EmergencyRequest, FriendsBooking } from "@/lib/data";
+import { EmergencyRequest, FriendsBooking, Station } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -16,13 +16,15 @@ import { Check, X, Phone, Car, Clock, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from "@/firebase";
-import { collection, doc, query, where, orderBy } from "firebase/firestore";
+import { collection, doc, query, where, orderBy, getDoc, runTransaction } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
 import { format } from 'date-fns';
 import { Separator } from "../ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 export function EmergencyTab() {
   const firestore = useFirestore();
+  const { toast } = useToast();
   
   const emergencyRequestsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -37,10 +39,59 @@ export function EmergencyTab() {
   const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
   const { data: friendsBookings, isLoading: friendsLoading } = useCollection<FriendsBooking>(friendsBookingsQuery);
 
-  const handleStatusUpdate = (collectionName: string, id: string, status: 'approved' | 'denied') => {
+  const handleStatusUpdate = async (bookingId: string, newStatus: 'approved' | 'denied') => {
     if (!firestore) return;
-    const requestRef = doc(firestore, collectionName, id);
-    updateDocumentNonBlocking(requestRef, { status });
+    
+    const bookingRef = doc(firestore, 'friendsBookings', bookingId);
+
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            const bookingDoc = await transaction.get(bookingRef);
+            if (!bookingDoc.exists()) {
+                throw "Booking document does not exist!";
+            }
+            
+            const bookingData = bookingDoc.data() as FriendsBooking;
+
+            // Update the booking status
+            transaction.update(bookingRef, { status: newStatus });
+
+            // If approved, update the station slot status
+            if (newStatus === 'approved' && bookingData.type === 'standard') {
+                const stationRef = doc(firestore, 'charging_stations', bookingData.stationId);
+                const stationDoc = await transaction.get(stationRef);
+
+                if (!stationDoc.exists()) {
+                    throw "Station document does not exist!";
+                }
+
+                const stationData = stationDoc.data() as Station;
+                const slots = stationData.slots;
+                const slotIndex = slots.findIndex(s => s.id === bookingData.slotId);
+
+                if (slotIndex > -1) {
+                    if (slots[slotIndex].status === 'available') {
+                        slots[slotIndex].status = 'occupied';
+                        transaction.update(stationRef, { slots: slots });
+                    } else {
+                        // Slot is already taken, we should probably not approve.
+                        // For now, we'll throw to rollback the transaction.
+                        throw `Slot ${bookingData.slotId} is no longer available.`;
+                    }
+                }
+            }
+        });
+
+        toast({ title: "Success", description: `Booking status updated to ${newStatus}.` });
+
+    } catch (error: any) {
+        console.error("Transaction failed: ", error);
+        toast({
+            variant: "destructive",
+            title: "Operation Failed",
+            description: typeof error === 'string' ? error : "Could not update booking status.",
+        });
+    }
   };
   
   const formatDate = (timestamp: any) => {
@@ -88,8 +139,8 @@ export function EmergencyTab() {
                            <TableCell className="text-center">
                                {booking.status === 'pending' && (
                                    <div className="flex gap-2 justify-center">
-                                       <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate('friendsBookings', booking.id, 'approved')}><Check className="h-4 w-4" /></Button>
-                                       <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate('friendsBookings', booking.id, 'denied')}><X className="h-4 w-4" /></Button>
+                                       <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking.id, 'approved')}><Check className="h-4 w-4" /></Button>
+                                       <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking.id, 'denied')}><X className="h-4 w-4" /></Button>
                                    </div>
                                )}
                            </TableCell>
@@ -119,8 +170,8 @@ export function EmergencyTab() {
                         </div>
                         {booking.status === 'pending' && (
                              <div className="flex gap-2 justify-end">
-                                <Button variant="outline" className="text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate('friendsBookings', booking.id, 'approved')}><Check className="mr-2 h-4 w-4" />Approve</Button>
-                                <Button variant="outline" className="text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate('friendsBookings', booking.id, 'denied')}><X className="mr-2 h-4 w-4" />Deny</Button>
+                                <Button variant="outline" className="text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking.id, 'approved')}><Check className="mr-2 h-4 w-4" />Approve</Button>
+                                <Button variant="outline" className="text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking.id, 'denied')}><X className="mr-2 h-4 w-4" />Deny</Button>
                             </div>
                         )}
                     </CardContent>
@@ -169,8 +220,8 @@ export function EmergencyTab() {
                   <TableCell className="text-center">
                     {request.status === 'pending' ? (
                       <div className="flex gap-2 justify-center">
-                        <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate('emergency_charging_requests', request.id, 'approved')}><Check className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate('emergency_charging_requests', request.id, 'denied')}><X className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'approved' })}><Check className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'denied' })}><X className="h-4 w-4" /></Button>
                       </div>
                     ) : (<span>-</span>)}
                   </TableCell>
@@ -197,8 +248,8 @@ export function EmergencyTab() {
                   <Badge variant="outline" className={cn({ "text-yellow-400 border-yellow-400": request.status === 'pending', "text-accent border-accent": request.status === 'approved', "text-red-400 border-red-400": request.status === 'denied', })}>{request.status}</Badge>
                   {request.status === 'pending' && (
                     <div className="flex gap-2">
-                      <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate('emergency_charging_requests', request.id, 'approved')}><Check className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate('emergency_charging_requests', request.id, 'denied')}><X className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'approved' })}><Check className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'denied' })}><X className="h-4 w-4" /></Button>
                     </div>
                   )}
                 </div>

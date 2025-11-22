@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Booking, EmergencyRequest, FriendsBooking, Station, UserProfile } from "@/lib/data";
@@ -11,10 +12,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Phone, Car, Clock, Pin, User } from "lucide-react";
+import { Check, X, Phone, Car, Clock, Pin, User, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, useAdmin } from "@/firebase";
 import { collection, doc, query, where, orderBy, getDoc, runTransaction, writeBatch } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
 import { format } from 'date-fns';
@@ -27,21 +28,22 @@ type CombinedBooking = (FriendsBooking & { bookingSource: 'friends' }) | (Bookin
 export function EmergencyTab() {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { isAdmin, isCheckingAdmin } = useAdmin();
   
   const emergencyRequestsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !isAdmin) return null;
     return query(collection(firestore, 'emergency_charging_requests'), orderBy('requestTime', 'desc'));
-  }, [firestore]);
+  }, [firestore, isAdmin]);
 
   const friendsBookingsQuery = useMemoFirebase(() => {
-    if(!firestore) return null;
+    if(!firestore || !isAdmin) return null;
     return query(collection(firestore, 'friendsBookings'), where('status', '==', 'pending'), orderBy('createdAt', 'desc'));
-  }, [firestore]);
+  }, [firestore, isAdmin]);
 
   const userBookingsQuery = useMemoFirebase(() => {
-      if(!firestore) return null;
+      if(!firestore || !isAdmin) return null;
       return query(collection(firestore, 'bookings'), where('status', '==', 'pending'));
-  }, [firestore])
+  }, [firestore, isAdmin])
 
   const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
   const { data: friendsBookings, isLoading: friendsLoading } = useCollection<FriendsBooking>(friendsBookingsQuery);
@@ -80,16 +82,17 @@ export function EmergencyTab() {
             const currentBookingData = bookingDoc.data();
             if (currentBookingData.status !== 'pending') throw "This booking has already been processed.";
 
-            const stationId = currentBookingData.stationId || currentBookingData.chargingStationId;
-            const slotId = currentBookingData.slotId;
-            const stationRef = doc(firestore, 'charging_stations', stationId);
+            if (newStatus === 'approved' && currentBookingData.type !== 'emergency') {
+                const stationId = currentBookingData.stationId || currentBookingData.chargingStationId;
+                const slotId = currentBookingData.slotId;
+                const stationRef = doc(firestore, 'charging_stations', stationId);
 
-            const stationDoc = await transaction.get(stationRef);
-            if (!stationDoc.exists()) throw "Station document does not exist!";
-            
-            if (newStatus === 'approved') {
+                const stationDoc = await transaction.get(stationRef);
+                if (!stationDoc.exists()) throw "Station document does not exist!";
+
                 const stationData = stationDoc.data() as Station;
                 const slotIndex = stationData.slots.findIndex(s => s.id === slotId);
+
                 if (slotIndex === -1) throw `Slot ${slotId} not found in station.`;
                 if (stationData.slots[slotIndex].status !== 'available') {
                     throw `Slot ${stationData.slots[slotIndex].id.split('-')[1]} is no longer available.`;
@@ -138,6 +141,39 @@ export function EmergencyTab() {
   }
 
   const isLoading = emergencyLoading || friendsLoading || userBookingsLoading;
+  
+  if (isCheckingAdmin) {
+    return (
+        <div className="flex flex-col gap-8">
+            <section>
+                <h2 className="text-2xl font-headline font-bold mb-4">Pending Booking Requests</h2>
+                <div className="rounded-md border p-4 space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                </div>
+            </section>
+            <Separator />
+            <section>
+                <h2 className="text-2xl font-headline font-bold mb-4">User Emergency Requests</h2>
+                <div className="rounded-md border p-4 space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                </div>
+            </section>
+        </div>
+    )
+  }
+  
+   if (!isAdmin) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Permission Denied</CardTitle>
+          <CardDescription>You do not have permission to view this page.</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -309,3 +345,5 @@ export function EmergencyTab() {
     </div>
   );
 }
+
+    

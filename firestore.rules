@@ -65,11 +65,8 @@ service cloud.firestore {
      * @description Manages user profile documents.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get, create, update, delete: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(userId) && resource != null;
     }
 
     /**
@@ -82,21 +79,16 @@ service cloud.firestore {
 
     /**
      * @description Central collection for all booking and emergency requests.
-     * @principle Users can create their own requests and read only their own requests.
-     *            Admins can list, read, and manage all requests.
      */
     match /bookingRequests/{requestId} {
-        // A user can create a request if they are signed in.
+        // Any user can create a request.
         allow create: if isSignedIn();
         
         // A user can read a request only if it belongs to them.
         allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
 
-        // Admins can update, or delete any specific request.
-        allow update, delete: if isAdmin();
-
-        // Admins can list all documents in the collection and read any single document.
-        allow list, get: if isAdmin();
+        // Admins can perform any action on any request.
+        allow get, list, update, delete: if isAdmin();
     }
 
     /**
@@ -104,7 +96,7 @@ service cloud.firestore {
      * @principle No client operation is allowed. Access is for server-side rules logic only.
      */
     match /roles_admin/{userId} {
-      allow get, list, create, update, delete: if false;
+      allow read, write: if false;
     }
   }
 }

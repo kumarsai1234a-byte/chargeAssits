@@ -23,7 +23,7 @@ export default function ProfilePage() {
 
     const bookingsQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
-        // Correctly filter requests to only what the user owns.
+        // Correctly filter requests to only what the user owns, as per security rules.
         return query(collection(firestore, 'bookingRequests'), where('userId', '==', user.uid), orderBy('timestamp', 'desc'));
     }, [user, firestore]);
 

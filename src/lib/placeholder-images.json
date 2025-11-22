@@ -1,12 +1,6 @@
 {
   "placeholderImages": [
     {
-      "id": "map-background",
-      "description": "A stylized map background for the charging station locator.",
-      "imageUrl": "https://images.unsplash.com/photo-1718498576333-a331226b33a3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxhYnN0cmFjdCUyMG1hcHxlbnwwfHx8fDE3NjM3ODIyMTF8MA&ixlib=rb-4.1.0&q=80&w=1080",
-      "imageHint": "abstract map"
-    },
-    {
       "id": "station-1",
       "description": "A modern EV charging station.",
       "imageUrl": "https://images.unsplash.com/photo-1593941707874-ef25b8b4a92b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxjaGFyZ2luZyUyMHN0YXRpb258ZW58MHx8fHwxNzYzODI1NTAyfDA&ixlib=rb-4.1.0&q=80&w=1080",

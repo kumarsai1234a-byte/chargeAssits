@@ -38,7 +38,7 @@ export default function DashboardPage() {
               </div>
             
             <Button asChild className="w-full">
-              <Link href={`/stations/${station.id}`}>View Details & Book</Link>
+              <Link href="/friends-booking">View Details & Book</Link>
             </Button>
           </CardContent>
         </Card>

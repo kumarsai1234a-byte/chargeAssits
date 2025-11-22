@@ -1,6 +1,7 @@
 
 'use client';
 
+import React from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import type { Station } from "@/lib/data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
@@ -16,11 +17,14 @@ import { doc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StationDetailPage({ params }: { params: { id: string } }) {
+  const { id } = React.use(params);
   const firestore = useFirestore();
+  
   const stationRef = useMemoFirebase(() => {
-    if (!firestore || !params.id) return null;
-    return doc(firestore, 'charging_stations', params.id);
-  }, [firestore, params.id]);
+    if (!firestore || !id) return null;
+    return doc(firestore, 'charging_stations', id);
+  }, [firestore, id]);
+
   const { data: station, isLoading } = useDoc<Station>(stationRef);
 
   if (isLoading) {

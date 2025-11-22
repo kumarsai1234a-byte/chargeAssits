@@ -1,8 +1,10 @@
 export const firebaseConfig = {
-  "projectId": "studio-876775802-be57c",
-  "appId": "1:637419679164:web:2a3d0e5dd3977454788fb9",
-  "apiKey": "AIzaSyDEwiaklPORDHFF8vLn1DjILqu_zFaBiHo",
-  "authDomain": "studio-876775802-be57c.firebaseapp.com",
-  "measurementId": "",
-  "messagingSenderId": "637419679164"
+  apiKey: "AIzaSyCaq6zXn-lUNYR8abEb6EYy7wCFELxWODo",
+  authDomain: "chargeassist-7f2cc.firebaseapp.com",
+  databaseURL: "https://chargeassist-7f2cc-default-rtdb.firebaseio.com",
+  projectId: "chargeassist-7f2cc",
+  storageBucket: "chargeassist-7f2cc.appspot.com",
+  messagingSenderId: "245456356022",
+  appId: "1:245456356022:web:c626a9d84e241c47369c17",
+  measurementId: "G-ZHLF0YECYW"
 };

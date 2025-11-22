@@ -1,7 +1,8 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -12,28 +13,52 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarInset,
-} from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Header } from "@/components/layout/header";
-import { cn } from "@/lib/utils";
-import { LayoutGrid, Zap, User, LifeBuoy, LogOut, ZapIcon } from "lucide-react";
+} from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+import { Header } from '@/components/layout/header';
+import { useUser } from '@/firebase';
+import { LayoutGrid, Zap, User, LogOut, ZapIcon } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: <LayoutGrid /> },
-  { href: "/emergency", label: "Emergency", icon: <Zap /> },
-  { href: "/profile", label: "Profile", icon: <User /> },
+  { href: '/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
+  { href: '/emergency', label: 'Emergency', icon: <Zap /> },
+  { href: '/profile', label: 'Profile', icon: <User /> },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isUserLoading } = useUser();
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [isUserLoading, user, router]);
+
+  if (isUserLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+            <ZapIcon className="h-12 w-12 animate-pulse text-primary" />
+            <p className="text-muted-foreground">Loading your experience...</p>
+        </div>
+      </div>
+    );
+  }
   
+  if (!user) {
+    return null; 
+  }
+
   return (
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
           <Link href="/dashboard" className="flex items-center gap-2 font-bold font-headline">
-             <ZapIcon className="size-6 text-primary" />
-             <span className="text-lg">ChargeAssist</span>
+            <ZapIcon className="size-6 text-primary" />
+            <span className="text-lg">ChargeAssist</span>
           </Link>
         </SidebarHeader>
         <SidebarContent>
@@ -41,7 +66,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <Link href={item.href}>
-                  <SidebarMenuButton 
+                  <SidebarMenuButton
                     isActive={pathname === item.href}
                     tooltip={item.label}
                     className="justify-start"
@@ -55,18 +80,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-            <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                <Link href="/">
-                    <LogOut className="size-4" />
-                    <span className="group-data-[collapsible=icon]:hidden">Logout</span>
-                </Link>
-            </Button>
+          <Button variant="outline" className="w-full justify-start gap-2" asChild>
+            <Link href="/">
+              <LogOut className="size-4" />
+              <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+            </Link>
+          </Button>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <Header />
         <main className="flex-1 flex flex-col p-4 md:p-6 lg:p-8">
-            {children}
+          {children}
         </main>
       </SidebarInset>
     </SidebarProvider>

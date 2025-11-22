@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -79,7 +80,8 @@ export default function ProfilePage() {
             case 'approved':
                 return { icon: <CheckCircle className="text-accent" />, text: "Approved", className: 'bg-accent text-accent-foreground border-accent' };
             case 'denied':
-                return { icon: <XCircle className="text-destructive" />, text: "Denied", className: 'bg-destructive text-destructive-foreground border-destructive' };
+            case 'cancelled':
+                return { icon: <XCircle className="text-destructive" />, text: status.charAt(0).toUpperCase() + status.slice(1), className: 'bg-destructive text-destructive-foreground border-destructive' };
             case 'pending':
                  return { icon: <Hourglass className="text-yellow-500" />, text: "Pending", className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' };
             case 'completed':

@@ -51,10 +51,14 @@ export function EmergencyTab() {
  const combinedBookings: CombinedBooking[] = React.useMemo(() => {
     const friendData = friendsBookings ? friendsBookings.map(b => ({ ...b, bookingSource: 'friends' as const })) : [];
     const userData = userBookings ? userBookings.map(b => ({ ...b, name: 'Registered User', phoneNumber: 'N/A', duration: 'N/A', type: 'standard' as const, bookingSource: 'users' as const })) : [];
-    return [...friendData, ...userData].sort((a, b) => {
+    
+    const allBookings = [...friendData, ...userData];
+
+    return allBookings.sort((a, b) => {
         const timeA = a.createdAt || a.bookingTime;
         const timeB = b.createdAt || b.bookingTime;
-        return timeB?.toDate() - timeA?.toDate();
+        if (!timeA || !timeB) return 0;
+        return timeB.toDate() - timeA.toDate();
     });
  }, [friendsBookings, userBookings]);
 
@@ -72,18 +76,21 @@ export function EmergencyTab() {
             if (!bookingDoc.exists()) {
                 throw "Booking document does not exist!";
             }
+            
             const currentBookingData = bookingDoc.data();
-
+            const stationId = currentBookingData.stationId || currentBookingData.chargingStationId;
+            const slotId = currentBookingData.slotId;
+            
             if (newStatus === 'approved' && currentBookingData.status === 'pending') {
-                const stationRef = doc(firestore, 'charging_stations', currentBookingData.stationId || currentBookingData.chargingStationId);
+                const stationRef = doc(firestore, 'charging_stations', stationId);
                 const stationDoc = await transaction.get(stationRef);
 
                 if (!stationDoc.exists()) throw "Station document does not exist!";
                 
                 const stationData = stationDoc.data() as Station;
-                const slotIndex = stationData.slots.findIndex(s => s.id === currentBookingData.slotId);
+                const slotIndex = stationData.slots.findIndex(s => s.id === slotId);
 
-                if (slotIndex === -1) throw `Slot ${currentBookingData.slotId} not found in station.`;
+                if (slotIndex === -1) throw `Slot ${slotId} not found in station.`;
                 if (stationData.slots[slotIndex].status !== 'available') {
                     throw `Slot ${stationData.slots[slotIndex].id.split('-')[1]} is no longer available.`;
                 }
@@ -96,11 +103,16 @@ export function EmergencyTab() {
             transaction.update(bookingRef, { status: newStatus });
         });
 
+        const userNotification = booking.bookingSource === 'friends'
+            ? `Please notify ${booking.name} at ${booking.phoneNumber}.`
+            : `User will see the status update in their profile.`;
+
         toast({ 
             title: `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-            description: `Booking for ${isUserBooking ? booking.stationName : (booking as FriendsBooking).name} has been updated.`,
+            description: `The request has been updated. ${userNotification}`,
             variant: 'default',
-            className: 'bg-accent text-accent-foreground border-accent',
+            className: newStatus === 'approved' ? 'bg-accent text-accent-foreground border-accent' : 'border-primary',
+            duration: 10000,
         });
 
     } catch (error: any) {

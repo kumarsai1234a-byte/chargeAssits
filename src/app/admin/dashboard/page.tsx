@@ -14,10 +14,10 @@ export default function AdminDashboardPage() {
         <h1 className="text-3xl font-headline font-bold">Admin Dashboard</h1>
         <Tabs defaultValue="stations">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
-            <TabsTrigger value="stations" className="py-2"><Fuel className="mr-2 size-4" />Stations</TabsTrigger>
-            <TabsTrigger value="users" className="py-2"><Users className="mr-2 size-4" />Users</TabsTrigger>
-            <TabsTrigger value="emergency" className="py-2"><ShieldAlert className="mr-2 size-4" />Emergency</TabsTrigger>
-            <TabsTrigger value="payments" className="py-2"><CreditCard className="mr-2 size-4" />Payments</TabsTrigger>
+            <TabsTrigger value="stations" className="py-2 flex-wrap justify-center"><Fuel className="mr-2 size-4" />Stations</TabsTrigger>
+            <TabsTrigger value="users" className="py-2 flex-wrap justify-center"><Users className="mr-2 size-4" />Users</TabsTrigger>
+            <TabsTrigger value="emergency" className="py-2 flex-wrap justify-center"><ShieldAlert className="mr-2 size-4" />Emergency</TabsTrigger>
+            <TabsTrigger value="payments" className="py-2 flex-wrap justify-center"><CreditCard className="mr-2 size-4" />Payments</TabsTrigger>
           </TabsList>
 
           <TabsContent value="stations">

@@ -13,13 +13,13 @@ export default function ProfilePage() {
     return (
         <AppLayout>
             <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <h1 className="text-3xl font-headline font-bold">My Profile</h1>
-                    <Button variant="outline"><Pencil className="mr-2 size-4" /> Edit Profile</Button>
+                    <Button variant="outline" className="w-full sm:w-auto"><Pencil className="mr-2 size-4" /> Edit Profile</Button>
                 </div>
                 <Card>
                     <CardContent className="pt-6">
-                        <div className="flex items-center gap-6">
+                        <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
                             <Avatar className="w-24 h-24">
                                 {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt="User" />}
                                 <AvatarFallback>U</AvatarFallback>
@@ -40,34 +40,34 @@ export default function ProfilePage() {
                     </CardHeader>
                     <CardContent>
                         <ul className="space-y-4">
-                            <li className="flex items-center justify-between">
+                            <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div>
                                     <p className="font-semibold">Downtown Supercharge - Slot 2</p>
                                     <p className="text-sm text-muted-foreground">July 20, 2024 - 4:30 PM</p>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-left sm:text-right">
                                     <p className="font-semibold">$15.75</p>
                                     <Badge>Completed</Badge>
                                 </div>
                             </li>
                             <Separator />
-                            <li className="flex items-center justify-between">
+                            <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div>
                                     <p className="font-semibold">Uptown Juice Point - Slot 1</p>
                                     <p className="text-sm text-muted-foreground">July 18, 2024 - 10:00 AM</p>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-left sm:text-right">
                                     <p className="font-semibold">$8.50</p>
                                     <Badge>Completed</Badge>
                                 </div>
                             </li>
                             <Separator />
-                             <li className="flex items-center justify-between">
+                             <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                 <div>
                                     <p className="font-semibold">Westside Energy Stop - Slot 2</p>
                                     <p className="text-sm text-muted-foreground">July 15, 2024 - 7:00 PM</p>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-left sm:text-right">
                                     <p className="font-semibold">$12.25</p>
                                     <Badge>Completed</Badge>
                                 </div>

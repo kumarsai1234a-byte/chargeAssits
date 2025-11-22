@@ -17,14 +17,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function StationsTab() {
   return (
     <div>
-        <div className="flex justify-end mb-4">
-            <Button><PlusCircle className="mr-2 size-4"/> Add Station</Button>
-        </div>
-      <div className="rounded-md border">
+      <div className="flex justify-end mb-4">
+        <Button><PlusCircle className="mr-2 size-4"/> Add Station</Button>
+      </div>
+      {/* Desktop View */}
+      <div className="hidden md:block rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -73,6 +75,50 @@ export function StationsTab() {
             })}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile View */}
+      <div className="grid gap-4 md:hidden">
+        {stations.map((station) => {
+          const availableSlots = station.slots.filter(s => s.status === 'available').length;
+          const totalSlots = station.slots.length;
+          const isOnline = station.slots.some(s => s.status !== 'unavailable');
+          
+          return (
+            <Card key={station.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <CardTitle>{station.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground">{station.address}</p>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button aria-haspopup="true" size="icon" variant="ghost" className="-mt-2 -mr-2">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Toggle menu</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem>Edit</DropdownMenuItem>
+                        <DropdownMenuItem>Delete</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">Available Slots</p>
+                  <p className="font-bold">{availableSlots} / {totalSlots}</p>
+                </div>
+                <Badge variant={isOnline ? "secondary" : "destructive"} className={isOnline ? "bg-accent text-accent-foreground" : ""}>
+                    {isOnline ? "Online" : "Offline"}
+                </Badge>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

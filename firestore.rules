@@ -86,17 +86,17 @@ service cloud.firestore {
      *            Admins can list, read, and manage all requests.
      */
     match /bookingRequests/{requestId} {
-        // A user can create a request if they are signed in and the request's userId matches their own.
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        // A user can create a request if they are signed in.
+        allow create: if isSignedIn();
         
         // A user can read a request only if it belongs to them.
         allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
 
-        // Admins can read, update, or delete any specific request.
-        allow get, update, delete: if isAdmin();
+        // Admins can update, or delete any specific request.
+        allow update, delete: if isAdmin();
 
-        // Only Admins can list all documents in the collection. Regular users must query by their userId.
-        allow list: if isAdmin();
+        // Admins can list all documents in the collection and read any single document.
+        allow list, get: if isAdmin();
     }
 
     /**
@@ -105,18 +105,6 @@ service cloud.firestore {
      */
     match /roles_admin/{userId} {
       allow get, list, create, update, delete: if false;
-    }
-    
-    // Legacy collections - should be denied access if migration is complete.
-    // Kept here for reference, but access is implicitly denied.
-    match /users/{userId}/bookings/{bookingId} {
-      allow read, write: if false;
-    }
-    match /friendsBookings/{bookingId} {
-      allow read, write: if false;
-    }
-    match /emergency_charging_requests/{requestId} {
-      allow read, write: if false;
     }
   }
 }

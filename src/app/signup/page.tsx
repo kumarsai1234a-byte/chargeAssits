@@ -1,4 +1,7 @@
+'use client'
+
 import Link from "next/link"
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -12,6 +15,15 @@ import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/layout/auth-layout"
 
 export default function SignupPage() {
+  const router = useRouter();
+
+  const handleSignup = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Next, we'll add Firebase authentication here.
+    // For now, we'll just navigate to the dashboard.
+    router.push("/dashboard");
+  };
+
   return (
     <AuthLayout>
       <Card className="mx-auto max-w-sm w-full">
@@ -22,7 +34,7 @@ export default function SignupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4">
+          <form onSubmit={handleSignup} className="grid gap-4">
             <div className="grid gap-2">
                 <Label htmlFor="full-name">Full name</Label>
                 <Input id="full-name" placeholder="Max Robinson" required />
@@ -38,13 +50,10 @@ export default function SignupPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" />
+              <Input id="password" type="password" required />
             </div>
-            <Button type="submit" className="w-full" asChild>
-                <Link href="/dashboard">Create an account</Link>
-            </Button>
-            <Button variant="outline" className="w-full">
-              Sign up with Google
+            <Button type="submit" className="w-full">
+                Create an account
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">

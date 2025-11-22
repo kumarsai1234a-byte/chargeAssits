@@ -281,14 +281,15 @@ export default function FriendsBookingPage() {
           <CardContent className="grid md:grid-cols-2 gap-4">
             {station.slots?.slice(0, 2).map(slot => (
               <Card key={slot.id} className={cn("p-4 flex flex-col gap-4", { 
-                  "bg-muted/30 border-dashed": slot.status !== 'available' && slot.status !== 'occupied',
-                  "border-destructive/50": slot.status === 'occupied'
+                  "bg-muted/30 border-dashed": slot.status === 'unavailable',
+                  "border-green-500/50 bg-green-500/10": slot.status === 'available',
+                  "border-destructive/50 bg-destructive/10": slot.status === 'occupied'
                 })}>
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold">Slot {slot.id.split('-')[1]}</h4>
                   <Badge variant={slot.status === 'available' ? 'secondary' : 'destructive'} 
                          className={cn({ 
-                            "bg-accent text-accent-foreground": slot.status === 'available',
+                            "bg-accent text-accent-foreground border-accent": slot.status === 'available',
                             "bg-destructive text-destructive-foreground": slot.status === 'occupied',
                             "bg-muted text-muted-foreground": slot.status === 'unavailable',
                           })}>
@@ -301,8 +302,14 @@ export default function FriendsBookingPage() {
                   <div className="flex items-center gap-2"><Power className="size-4" /> {slot.charger.power}</div>
                 </div>
                 <BookingDialog slot={slot} stationId={station.id}>
-                    <Button className="w-full" disabled={slot.status !== 'available'}>
-                        {slot.status === 'occupied' ? 'Occupied' : 'Book Slot'}
+                    <Button 
+                      className={cn("w-full", {
+                        "bg-accent hover:bg-accent/90": slot.status === 'available',
+                        "bg-destructive hover:bg-destructive/90": slot.status === 'occupied',
+                      })}
+                      disabled={slot.status !== 'available'}
+                    >
+                      {slot.status === 'available' ? 'Book Slot' : 'Occupied'}
                     </Button>
                 </BookingDialog>
               </Card>
@@ -332,3 +339,4 @@ export default function FriendsBookingPage() {
     </AppLayout>
   );
 }
+

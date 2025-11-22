@@ -345,5 +345,3 @@ export function EmergencyTab() {
     </div>
   );
 }
-
-    

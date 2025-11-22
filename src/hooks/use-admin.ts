@@ -14,10 +14,11 @@ export function useAdmin() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   
+  // The admin check should only proceed if we are NOT loading the user and the user object exists.
   const adminRoleRef = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (isUserLoading || !user || !firestore) return null;
     return doc(firestore, `roles_admin/${user.uid}`);
-  }, [firestore, user]);
+  }, [firestore, user, isUserLoading]);
 
   const { data: adminDoc, isLoading: isRoleLoading } = useDoc(adminRoleRef);
 
@@ -25,13 +26,14 @@ export function useAdmin() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    // Determine the overall loading state
+    // The overall check is happening if the user is loading OR if the role document is loading.
+    // The role document will only start loading after the user is available.
     const checking = isUserLoading || isRoleLoading;
     setIsCheckingAdmin(checking);
 
     if (!checking) {
-      // If not loading, determine admin status
-      // `adminDoc` will be `null` if the document doesn't exist.
+      // If we are no longer in a loading state, we can determine the admin status.
+      // `adminDoc` will be `null` if the user document doesn't exist in roles_admin.
       // It will have data if it does exist.
       setIsAdmin(!!adminDoc);
     }

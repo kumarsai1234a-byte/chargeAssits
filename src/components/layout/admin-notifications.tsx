@@ -15,19 +15,19 @@ export function AdminNotifications() {
   const { isAdmin, isCheckingAdmin } = useAdmin();
 
   const friendsBookingsQuery = useMemoFirebase(() => {
-    // Only create the query if the user is a verified admin.
+    // **FIX**: Only create the query if the user is a verified admin.
     if (!firestore || isCheckingAdmin || !isAdmin) return null;
     return query(collection(firestore, 'friendsBookings'), where('status', '==', 'pending'));
   }, [firestore, isAdmin, isCheckingAdmin]);
 
   const emergencyRequestsQuery = useMemoFirebase(() => {
-    // Only create the query if the user is a verified admin.
+    // **FIX**: Only create the query if the user is a verified admin.
     if (!firestore || isCheckingAdmin || !isAdmin) return null;
     return query(collection(firestore, 'emergency_charging_requests'), where('status', '==', 'pending'));
   }, [firestore, isAdmin, isCheckingAdmin]);
 
-  const { data: friendsBookings } = useCollection<FriendsBooking>(friendsBookingsQuery);
-  const { data: emergencyRequests } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
+  const { data: friendsBookings, isLoading: friendsLoading } = useCollection<FriendsBooking>(friendsBookingsQuery);
+  const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
   
   // Don't show anything until we confirm user is an admin
   if (isCheckingAdmin || !isAdmin) {

@@ -74,7 +74,7 @@ export default function DashboardPage() {
             </Card>
             <div className="space-y-4">
                 {isLoading && renderSkeleton()}
-                {station && renderStationCard(station)}
+                {station && station.id && renderStationCard(station)}
             </div>
         </div>
       </div>

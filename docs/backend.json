@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -6,30 +7,12 @@
       "type": "object",
       "description": "Represents a user of the ChargeAssist application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the user."
-        },
-        "email": {
-          "type": "string",
-          "description": "User's email address.",
-          "format": "email"
-        },
-        "name": {
-          "type": "string",
-          "description": "User's full name."
-        },
-        "phoneNumber": {
-          "type": "string",
-          "description": "User's phone number."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the user." },
+        "email": { "type": "string", "description": "User's email address.", "format": "email" },
+        "name": { "type": "string", "description": "User's full name." },
+        "phoneNumber": { "type": "string", "description": "User's phone number." }
       },
-      "required": [
-        "id",
-        "email",
-        "name",
-        "phoneNumber"
-      ]
+      "required": ["id", "email", "name", "phoneNumber"]
     },
     "ChargingStation": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -37,111 +20,62 @@
       "type": "object",
       "description": "Represents a charging station.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the charging station."
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the charging station."
-        },
-        "location": {
-          "type": "string",
-          "description": "Location of the charging station (e.g., address or coordinates)."
-        },
-        "availableSlots": {
-          "type": "number",
-          "description": "Number of available charging slots at the station."
-        },
-        "details": {
-          "type": "string",
-          "description": "Detailed information about the charging station."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the charging station." },
+        "name": { "type": "string", "description": "Name of the charging station." },
+        "location": { "type": "string", "description": "Location of the charging station (e.g., address or coordinates)." },
+        "availableSlots": { "type": "number", "description": "Number of available charging slots at the station." },
+        "details": { "type": "string", "description": "Detailed information about the charging station." }
       },
-      "required": [
-        "id",
-        "name",
-        "location",
-        "availableSlots",
-        "details"
-      ]
+      "required": ["id", "name", "location", "availableSlots", "details"]
     },
     "Booking": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Booking",
       "type": "object",
-      "description": "Represents a booking for a charging slot.",
+      "description": "Represents a booking for a charging slot by a logged-in user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the booking."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N Booking)"
-        },
-        "chargingStationId": {
-          "type": "string",
-          "description": "Reference to ChargingStation. (Relationship: ChargingStation 1:N Booking)"
-        },
-        "bookingTime": {
-          "type": "string",
-          "description": "Date and time of the booking.",
-          "format": "date-time"
-        },
-        "vehicleNumber": {
-          "type": "string",
-          "description": "Vehicle number associated with the booking."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the booking." },
+        "userId": { "type": "string", "description": "Reference to User. (Relationship: User 1:N Booking)" },
+        "chargingStationId": { "type": "string", "description": "Reference to ChargingStation." },
+        "bookingTime": { "type": "string", "description": "Date and time of the booking.", "format": "date-time" },
+        "vehicleNumber": { "type": "string", "description": "Vehicle number associated with the booking." }
       },
-      "required": [
-        "id",
-        "userId",
-        "chargingStationId",
-        "bookingTime",
-        "vehicleNumber"
-      ]
+      "required": ["id", "userId", "chargingStationId", "bookingTime", "vehicleNumber"]
+    },
+    "FriendsBooking": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "FriendsBooking",
+      "type": "object",
+      "description": "Represents a booking made from the public 'Friends Booking' page, pending admin approval.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the booking request." },
+        "name": { "type": "string", "description": "Name of the person making the booking." },
+        "phoneNumber": { "type": "string", "description": "Phone number of the person." },
+        "vehicleNumber": { "type": "string", "description": "Vehicle registration number." },
+        "duration": { "type": "string", "description": "Requested charging duration in minutes." },
+        "stationId": { "type": "string", "description": "The ID of the station being booked." },
+        "slotId": { "type": "string", "description": "The specific slot being requested." },
+        "type": { "type": "string", "enum": ["standard", "emergency"], "description": "The type of booking." },
+        "status": { "type": "string", "enum": ["pending", "approved", "denied"], "description": "Approval status of the request." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
+        "location": { "type": "string", "description": "User's location for emergency requests." }
+      },
+      "required": ["id", "name", "phoneNumber", "vehicleNumber", "duration", "stationId", "slotId", "type", "status", "createdAt"]
     },
     "EmergencyChargingRequest": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "EmergencyChargingRequest",
       "type": "object",
-      "description": "Represents a request for emergency charging service.",
+      "description": "Represents a request for emergency charging service by a logged-in user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the emergency charging request."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N EmergencyChargingRequest)"
-        },
-        "location": {
-          "type": "string",
-          "description": "Location where the emergency charging is requested."
-        },
-        "vehicleType": {
-          "type": "string",
-          "description": "Type of vehicle requiring emergency charging."
-        },
-        "requestTime": {
-          "type": "string",
-          "description": "Date and time the emergency charging was requested.",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "description": "Status of the emergency charging request (e.g., pending, approved, denied)."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the emergency charging request." },
+        "userId": { "type": "string", "description": "Reference to User." },
+        "location": { "type": "string", "description": "Location where the emergency charging is requested." },
+        "vehicleType": { "type": "string", "description": "Type of vehicle requiring emergency charging." },
+        "requestTime": { "type": "string", "format": "date-time", "description": "Timestamp of the request." },
+        "status": { "type": "string", "description": "Status of the request (e.g., pending, approved, denied)." }
       },
-      "required": [
-        "id",
-        "userId",
-        "location",
-        "vehicleType",
-        "requestTime",
-        "status"
-      ]
+      "required": ["id", "userId", "location", "vehicleType", "requestTime", "status"]
     },
     "Admin": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -149,120 +83,25 @@
       "type": "object",
       "description": "Represents an administrator of the application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the admin."
-        },
-        "email": {
-          "type": "string",
-          "description": "Admin's email address.",
-          "format": "email"
-        },
-        "name": {
-          "type": "string",
-          "description": "Admin's full name."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the admin." },
+        "email": { "type": "string", "description": "Admin's email address.", "format": "email" },
+        "name": { "type": "string", "description": "Admin's full name." }
       },
-      "required": [
-        "id",
-        "email",
-        "name"
-      ]
+      "required": ["id", "email", "name"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password", "anonymous"]
   },
   "firestore": {
     "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profiles. Path-based ownership ensures only the user can access their data.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/charging_stations/{chargingStationId}",
-        "definition": {
-          "entityName": "ChargingStation",
-          "schema": {
-            "$ref": "#/backend/entities/ChargingStation"
-          },
-          "description": "Stores charging station details. Publicly accessible for listing, but creation/modification is restricted to admins.",
-          "params": [
-            {
-              "name": "chargingStationId",
-              "description": "The unique identifier for the charging station."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/bookings/{bookingId}",
-        "definition": {
-          "entityName": "Booking",
-          "schema": {
-            "$ref": "#/backend/entities/Booking"
-          },
-          "description": "Stores booking information. Path-based ownership ensures users can only manage their bookings. Includes denormalized 'userId' and 'chargingStationId' for authorization independence.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "bookingId",
-              "description": "The unique identifier for the booking."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/emergency_charging_requests/{emergencyChargingRequestId}",
-        "definition": {
-          "entityName": "EmergencyChargingRequest",
-          "schema": {
-            "$ref": "#/backend/entities/EmergencyChargingRequest"
-          },
-          "description": "Stores emergency charging requests. Includes the 'userId' to track who made the request.",
-          "params": [
-            {
-              "name": "emergencyChargingRequestId",
-              "description": "The unique identifier for the emergency charging request."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/roles_admin/{userId}",
-        "definition": {
-          "entityName": "Admin",
-          "schema": {
-            "$ref": "#/backend/entities/Admin"
-          },
-          "description": "Implements DBAC (Database-Based Access Control). The existence of a document in this collection grants admin privileges.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the admin user."
-            }
-          ]
-        }
-      }
+      { "path": "/users/{userId}", "definition": { "entityName": "User", "schema": { "$ref": "#/backend/entities/User" }, "description": "Stores user profiles." } },
+      { "path": "/charging_stations/{chargingStationId}", "definition": { "entityName": "ChargingStation", "schema": { "$ref": "#/backend/entities/ChargingStation" }, "description": "Stores charging station details." } },
+      { "path": "/users/{userId}/bookings/{bookingId}", "definition": { "entityName": "Booking", "schema": { "$ref": "#/backend/entities/Booking" }, "description": "Stores bookings for logged-in users." } },
+      { "path": "/emergency_charging_requests/{emergencyChargingRequestId}", "definition": { "entityName": "EmergencyChargingRequest", "schema": { "$ref": "#/backend/entities/EmergencyChargingRequest" }, "description": "Stores emergency requests from logged-in users." } },
+      { "path": "/roles_admin/{userId}", "definition": { "entityName": "Admin", "schema": { "$ref": "#/backend/entities/Admin" }, "description": "Grants admin privileges via document existence." } },
+      { "path": "/friendsBookings/{bookingId}", "definition": { "entityName": "FriendsBooking", "schema": { "$ref": "#/backend/entities/FriendsBooking" }, "description": "Stores booking requests from the public 'Friends Booking' page, managed by admins." } }
     ],
-    "reasoning": "The Firestore structure is designed to ensure security, scalability, and debuggability, adhering to the principles of Authorization Independence, Clarity of Intent, DBAC, and QAPs. It leverages denormalization and structural segregation to simplify security rules and prevent unauthorized data access.\n\n*   **Users Collection (`/users/{userId}`):** Stores user profiles. Path-based ownership ensures only the user can access their data.\n*   **Charging Stations Collection (`/charging_stations/{chargingStationId}`):** Stores charging station details. Publicly accessible for listing, but creation/modification is restricted to admins.\n*   **Bookings Collection (`/users/{userId}/bookings/{bookingId}`):** Stores booking information. Path-based ownership ensures users can only manage their bookings. The `chargingStationId` is stored in the booking document.\n*   **Emergency Charging Requests Collection (`/emergency_charging_requests/{emergencyChargingRequestId}`):** Stores emergency charging requests. Includes the `userId` to track who made the request. Status field manages the state.\n*   **Admin Roles Collection (`/roles_admin/{userId}`):** Implements DBAC (Database-Based Access Control). The existence of a document in this collection grants admin privileges. Rules check for the existence of a document in this collection to authorize admin-only operations.\n\n**Authorization Independence (Denormalization):**\n\n*   The design avoids `get()` calls in security rules by denormalizing authorization data. Specifically, for bookings, the `userId` is included in each booking document. This allows security rules to validate the user's ownership of the booking without needing to fetch the parent user document.\n\n**QAPs (Rules are not Filters):**\n\n*   The structure supports secure `list` operations by segregating data based on access needs. Publicly listable charging stations are in the `/charging_stations` collection, while user-specific bookings are in `/users/{userId}/bookings`. The admin roles are managed via the presence of a document `/roles_admin/{userId}` which ensures listing users cannot reveal admin roles.\n\n**Justification for Choices:**\n\n*   **Path-Based Ownership:**  The `/users/{userId}/bookings` path enforces that only the authenticated user can manage their bookings.\n*   **Membership Maps:** Not applicable in this design because collaborative access patterns aren't a primary requirement. However, this can be implemented if we want to allow multiple users to manage a single charging station by adding a `members` field in `/charging_stations/{chargingStationId}`.\n*   **DBAC (Database-Based Access Control):** The `/roles_admin/{userId}` collection ensures that admin roles are managed via database entries and simplifies rule evaluation.\n*   **Structural Segregation:**  Separating charging stations, user profiles, bookings, emergency requests, and admin roles into distinct collections ensures that each collection has a homogeneous security posture, simplifying rule creation and maintenance."
+    "reasoning": "The Firestore structure is designed for security and scalability. Key collections include users, charging_stations, and various booking/request types. User-specific data is nested where appropriate (e.g., user bookings) to enforce ownership via security rules. A new top-level `friendsBookings` collection has been added to handle booking requests from unauthenticated users on the new page; these are publicly writable but only manageable by admins, ensuring all requests go through an approval process."
   }
 }

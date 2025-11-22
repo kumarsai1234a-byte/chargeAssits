@@ -17,7 +17,7 @@ export default function AdminDashboardPage() {
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
             <TabsTrigger value="stations" className="py-2 flex-wrap justify-center"><Fuel className="mr-2 size-4" />Stations</TabsTrigger>
             <TabsTrigger value="users" className="py-2 flex-wrap justify-center"><Users className="mr-2 size-4" />Users</TabsTrigger>
-            <TabsTrigger value="emergency" className="py-2 flex-wrap justify-center"><ShieldAlert className="mr-2 size-4" />Emergency</TabsTrigger>
+            <TabsTrigger value="requests" className="py-2 flex-wrap justify-center"><ShieldAlert className="mr-2 size-4" />Requests</TabsTrigger>
             <TabsTrigger value="payments" className="py-2 flex-wrap justify-center"><CreditCard className="mr-2 size-4" />Payments</TabsTrigger>
           </TabsList>
 
@@ -45,11 +45,11 @@ export default function AdminDashboardPage() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="emergency">
+          <TabsContent value="requests">
             <Card>
               <CardHeader>
-                <CardTitle>Emergency Requests</CardTitle>
-                <CardDescription>Approve or deny emergency charging requests.</CardDescription>
+                <CardTitle>Incoming Requests</CardTitle>
+                <CardDescription>Approve or deny emergency requests and friends bookings.</CardDescription>
               </CardHeader>
               <CardContent>
                 <EmergencyTab />

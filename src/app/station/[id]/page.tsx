@@ -16,12 +16,11 @@ import { doc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StationDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params;
   const firestore = useFirestore();
   const stationRef = useMemoFirebase(() => {
-    if (!firestore || !id) return null;
-    return doc(firestore, 'charging_stations', id);
-  }, [firestore, id]);
+    if (!firestore || !params.id) return null;
+    return doc(firestore, 'charging_stations', params.id);
+  }, [firestore, params.id]);
   const { data: station, isLoading } = useDoc<Station>(stationRef);
 
   if (isLoading) {

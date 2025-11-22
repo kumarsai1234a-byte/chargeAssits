@@ -14,10 +14,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/layout/auth-layout"
-import { useAuth, useFirestore, setDocumentNonBlocking } from "@/firebase";
+import { useAuth, useFirestore } from "@/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import { doc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,10 +40,9 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Update user profile
+      // After user is created in Auth, update their profile and create the Firestore doc.
       await updateProfile(user, { displayName: fullName });
 
-      // Create user document in Firestore
       const userRef = doc(firestore, "users", user.uid);
       const userData = {
         id: user.uid,
@@ -52,7 +51,8 @@ export default function SignupPage() {
         createdAt: serverTimestamp(),
       };
       
-      setDocumentNonBlocking(userRef, userData, { merge: true });
+      // Using setDoc directly is better here to ensure it completes after user creation.
+      await setDoc(userRef, userData);
 
       toast({
         title: "Signup Successful",

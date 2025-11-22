@@ -1,100 +1,39 @@
 rules_version = '2';
 
-/**
- * @name ChargeAssist Firestore Security Rules
- * @author AI-Generated (Prototyping Mode)
- *
- * @description
- * This ruleset is designed for the ChargeAssist application, providing a secure
- * yet flexible data access layer suitable for rapid development and iteration.
- * It is based on a centralized request model for scalability and security.
- *
- * @philosophy
- * Core Philosophy: The security model employs a hybrid approach. It uses strict,
- * path-based ownership for user-specific data (profiles). For administrative
- * functions, it uses Database-Based Access Control (DBAC), where admin privileges
- * are granted by the existence of a document in a specific roles collection.
- * Public data, like charging stations, is readable by all users to facilitate discovery.
- * All user-generated actions (bookings, emergencies) are funneled through a
- * single `bookingRequests` collection, which has granular access controls.
- *
- * @structure
- * Data Structure:
- * - /users/{userId} - Private user profile.
- * - /charging_stations/{stationId} - Publicly viewable charging stations, managed by admins.
- * - /bookingRequests/{requestId} - Central collection for all user-initiated requests (bookings, emergencies).
- *   Users can create requests and read only their own. Admins have full CRUD access.
- * - /roles_admin/{userId} - A private lookup collection to designate admins.
- *
- * @decisions
- * Key Security Decisions:
- * - Default Deny: All paths are closed by default. Access is granted explicitly.
- * - User Data Privacy: The top-level `/users` collection cannot be listed.
- * - Centralized Requests: Consolidating requests into a single collection
- *   simplifies admin oversight and security rules.
- * - Admin Control: A dedicated `/roles_admin` collection serves as the single
- *   source of truth for administrative privileges.
- * - Denormalization for Security: Request documents contain a denormalized 'userId'
- *   field, which is critical for writing security rules that allow users to read
- *   only their own documents.
- */
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // -------------------------------------------------------------------------
-    // Helper Functions
-    // -------------------------------------------------------------------------
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
+    // Helper function to check for admin custom claim
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+      return request.auth != null && request.auth.token.admin == true;
     }
 
-    // -------------------------------------------------------------------------
-    // Collection Rules
-    // -------------------------------------------------------------------------
-
-    /**
-     * @description Manages user profile documents.
-     */
+    // USERS can only read and write their own profile
     match /users/{userId} {
-      allow get, create, update, delete: if isOwner(userId);
-      allow list: if false;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-
-    /**
-     * @description Manages public charging station information.
-     */
+    
+    // CHARGING STATIONS are public to read, but only admins can modify them
     match /charging_stations/{stationId} {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    /**
-     * @description Central collection for all booking and emergency requests.
-     */
-    match /bookingRequests/{requestId} {
-        // Any user can create a request.
-        allow create: if isSignedIn();
-        
-        // A user can read a request only if it belongs to them.
-        allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+    // BOOKING REQUESTS can be created by any authenticated user,
+    // but only the user who created it can read it, and only admins can manage it.
+    match /bookingRequests/{docId} {
+      // Any authenticated user can create a booking request
+      allow create: if request.auth != null;
 
-        // Admins can perform any action on any request.
-        allow get, list, update, delete: if isAdmin();
+      // A user can read their own booking request document
+      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Admins have full list, read, update, and delete access
+      allow list, read, update, delete: if isAdmin();
     }
 
-    /**
-     * @description A private collection that grants admin privileges via document existence.
-     * @principle No client operation is allowed. Access is for server-side rules logic only.
-     */
+    // roles_admin collection is now deprecated in favor of custom claims,
+    // so it is locked down.
     match /roles_admin/{userId} {
       allow read, write: if false;
     }

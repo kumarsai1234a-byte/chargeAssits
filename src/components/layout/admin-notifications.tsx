@@ -3,30 +3,27 @@
 import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
 import type { BookingRequest } from "@/lib/data";
 import { formatDistanceToNow } from 'date-fns';
-import { useAdmin } from "@/hooks/use-admin";
 
 export function AdminNotifications() {
   const firestore = useFirestore();
-  const { isAdmin, isCheckingAdmin } = useAdmin();
+  const { user } = useUser();
 
+  // This component is only rendered on admin pages.
+  // We rely on security rules to allow/deny this query.
+  // If a non-admin somehow sees this component, the query will fail,
+  // which is the correct, secure behavior.
   const pendingRequestsQuery = useMemoFirebase(() => {
-    // **FIX**: Only create the query if the user is a verified admin.
-    if (!firestore || isCheckingAdmin || !isAdmin) return null;
+    if (!firestore || !user) return null;
     return query(collection(firestore, 'bookingRequests'), where('status', '==', 'pending'));
-  }, [firestore, isAdmin, isCheckingAdmin]);
+  }, [firestore, user]);
 
 
-  const { data: pendingRequests, isLoading: requestsLoading } = useCollection<BookingRequest>(pendingRequestsQuery);
+  const { data: pendingRequests } = useCollection<BookingRequest>(pendingRequestsQuery);
   
-  // Don't show anything until we confirm user is an admin
-  if (isCheckingAdmin || !isAdmin) {
-      return null;
-  }
-
   const pendingCount = pendingRequests?.length || 0;
 
   const formatDate = (timestamp: any) => {
@@ -38,7 +35,6 @@ export function AdminNotifications() {
         return 'a while ago';
     }
   }
-
 
   return (
     <Popover>

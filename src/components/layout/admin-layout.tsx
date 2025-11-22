@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -20,7 +19,6 @@ import { Header } from '@/components/layout/header';
 import { Shield, LayoutGrid, LogOut, ZapIcon, Home } from 'lucide-react';
 import { useUser, useAuth } from '@/firebase';
 import { signOut } from 'firebase/auth';
-import { useAdmin } from '@/hooks/use-admin';
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
@@ -30,21 +28,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isUserLoading } = useUser();
-  const { isAdmin, isCheckingAdmin } = useAdmin();
   const auth = useAuth();
 
   useEffect(() => {
-    // Wait until both user loading and admin check are complete
-    if (!isUserLoading && !isCheckingAdmin) {
-      if (!user) {
-        // If no user, redirect to login
-        router.push('/login');
-      } else if (!isAdmin) {
-        // If user is not an admin, redirect to user dashboard
-        router.push('/dashboard');
-      }
+    // If auth state is still loading, do nothing.
+    if (isUserLoading) {
+      return;
     }
-  }, [isUserLoading, isCheckingAdmin, user, isAdmin, router]);
+    // If loading is finished and there's no user, redirect to login.
+    if (!user) {
+      router.push('/login');
+    }
+    // Note: We are no longer redirecting non-admins here.
+    // We rely on Firestore Security Rules to block data access.
+    // If a non-admin lands here, they will see permission errors, which is correct.
+  }, [isUserLoading, user, router]);
 
   const handleLogout = async () => {
     if (auth) {
@@ -53,21 +51,20 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Show a loading state while we verify admin privileges
-  if (isUserLoading || isCheckingAdmin) {
+  // Show a loading state while we verify user auth
+  if (isUserLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
             <Shield className="h-12 w-12 animate-pulse text-primary" />
-            <p className="text-muted-foreground">Verifying admin access...</p>
+            <p className="text-muted-foreground">Loading Admin Panel...</p>
         </div>
       </div>
     );
   }
 
-  // If checks are done and user is not an admin, they will be redirected.
-  // Render null while redirect is happening.
-  if (!isAdmin) {
+  // If auth is loaded but no user, redirect will happen. Render null in the meantime.
+  if (!user) {
     return null;
   }
   

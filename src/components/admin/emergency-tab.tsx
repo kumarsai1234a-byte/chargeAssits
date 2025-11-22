@@ -12,10 +12,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Phone, Car, Clock, Pin, User, ShieldCheck, MessageSquare } from "lucide-react";
+import { Check, X, Car, Pin, User, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, useAdmin } from "@/firebase";
+import { useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
 import { collection, doc, query, orderBy, runTransaction } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
 import { format } from 'date-fns';
@@ -23,15 +22,17 @@ import { useToast } from "@/hooks/use-toast";
 
 export function EmergencyTab() {
   const firestore = useFirestore();
+  const { user, isUserLoading } = useUser();
   const { toast } = useToast();
-  const { isAdmin, isCheckingAdmin } = useAdmin();
 
   const requestsQuery = useMemoFirebase(() => {
-    if (!firestore || !isAdmin) return null;
+    // This query will only succeed if the user is an admin, per security rules.
+    // We wait until the user is loaded to prevent premature queries.
+    if (isUserLoading || !user || !firestore) return null;
     return query(collection(firestore, 'bookingRequests'), orderBy('timestamp', 'desc'));
-  }, [firestore, isAdmin]);
+  }, [firestore, user, isUserLoading]);
 
-  const { data: requests, isLoading } = useCollection<BookingRequest>(requestsQuery);
+  const { data: requests, isLoading, error } = useCollection<BookingRequest>(requestsQuery);
 
   const handleStatusUpdate = async (request: BookingRequest, newStatus: 'approved' | 'rejected') => {
     if (!firestore) return;
@@ -49,6 +50,8 @@ export function EmergencyTab() {
             if (newStatus === 'approved' && currentRequestData.type === 'booking') {
                 const stationId = currentRequestData.stationId;
                 const slotId = currentRequestData.slotId;
+                if (!stationId || !slotId) throw "Invalid booking request data.";
+
                 const stationRef = doc(firestore, 'charging_stations', stationId);
 
                 const stationDoc = await transaction.get(stationRef);
@@ -72,10 +75,9 @@ export function EmergencyTab() {
         const statusText = newStatus === 'approved' ? 'Approved' : 'Rejected';
         toast({ 
             title: `Request ${statusText}`,
-            description: `The request has been updated. The user will see the status change.`,
+            description: `The request from ${request.userName} has been updated.`,
             variant: 'default',
             className: newStatus === 'approved' ? 'bg-accent text-accent-foreground border-accent' : 'border-primary',
-            duration: 8000,
         });
 
     } catch (error: any) {
@@ -94,18 +96,37 @@ export function EmergencyTab() {
     return format(date, 'MMMM dd, yyyy - h:mm a');
   }
   
-  if (isCheckingAdmin) {
-    return <Skeleton className="h-64 w-full" />
+  if (isLoading || isUserLoading) {
+     return (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Details</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-center">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...Array(5)].map((_, i) => (
+                <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      );
   }
   
-   if (!isAdmin) {
+   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Permission Denied</CardTitle>
-          <CardDescription>You do not have permission to view this page.</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="text-destructive p-4 border border-destructive/50 rounded-md">
+        <h3 className="font-bold">Access Denied</h3>
+        <p className="text-sm">You do not have permission to view this data. Please contact your system administrator if you believe this is an error.</p>
+        <p className="text-xs mt-2 font-mono">{error.message}</p>
+      </div>
     );
   }
 
@@ -113,6 +134,10 @@ export function EmergencyTab() {
   const processedRequests = requests?.filter(r => r.status !== 'pending') || [];
 
   const renderRequestRows = (reqs: BookingRequest[]) => {
+    if (reqs.length === 0) {
+        return <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No requests in this category.</TableCell></TableRow>
+    }
+
     return reqs.map(request => (
          <TableRow key={request.id}>
              <TableCell className="font-medium">
@@ -170,11 +195,7 @@ export function EmergencyTab() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                   {isLoading && [...Array(2)].map((_, i) => (
-                       <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
-                   ))}
                    {renderRequestRows(pendingRequests)}
-                   { !isLoading && pendingRequests.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No pending requests.</TableCell></TableRow>}
                 </TableBody>
             </Table>
          </div>
@@ -195,11 +216,7 @@ export function EmergencyTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && [...Array(3)].map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
-              ))}
               {renderRequestRows(processedRequests)}
-              {!isLoading && processedRequests.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No processed requests.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>

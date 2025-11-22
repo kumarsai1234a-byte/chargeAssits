@@ -22,16 +22,24 @@ export default function ProfilePage() {
     const firestore = useFirestore();
 
     const bookingsQuery = useMemoFirebase(() => {
+        // If the user is not loaded or doesn't exist, the query is null.
         if (!user || !firestore) return null;
-        // Correctly filter requests to only what the user owns, as per security rules.
-        return query(collection(firestore, 'bookingRequests'), where('userId', '==', user.uid), orderBy('timestamp', 'desc'));
+        
+        // This query is now correct and secure. It only fetches documents
+        // where the `userId` field matches the currently logged-in user's UID.
+        // This is allowed by the security rules.
+        return query(
+          collection(firestore, 'bookingRequests'), 
+          where('userId', '==', user.uid), 
+          orderBy('timestamp', 'desc')
+        );
     }, [user, firestore]);
 
     const { data: bookings, isLoading: areBookingsLoading } = useCollection<BookingRequest>(bookingsQuery);
 
     const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar');
 
-    if (isUserLoading || !user) {
+    if (isUserLoading || (areBookingsLoading && !bookings)) {
         return (
             <AppLayout>
                  <div className="space-y-6">
@@ -67,6 +75,11 @@ export default function ProfilePage() {
                  </div>
             </AppLayout>
         )
+    }
+    
+    // This should only happen if the user is not logged in, in which case the AppLayout will handle redirection.
+    if (!user) {
+        return null;
     }
 
     const formatDate = (timestamp: any) => {

@@ -15,14 +15,14 @@ export function AdminNotifications() {
   const { isAdmin, isCheckingAdmin } = useAdmin();
 
   const friendsBookingsQuery = useMemoFirebase(() => {
-    // Only run this query if the user is an admin and the check is complete
-    if (!firestore || !isAdmin || isCheckingAdmin) return null;
+    // Only create the query if the user is a verified admin.
+    if (!firestore || isCheckingAdmin || !isAdmin) return null;
     return query(collection(firestore, 'friendsBookings'), where('status', '==', 'pending'));
   }, [firestore, isAdmin, isCheckingAdmin]);
 
   const emergencyRequestsQuery = useMemoFirebase(() => {
-    // Only run this query if the user is an admin and the check is complete
-    if (!firestore || !isAdmin || isCheckingAdmin) return null;
+    // Only create the query if the user is a verified admin.
+    if (!firestore || isCheckingAdmin || !isAdmin) return null;
     return query(collection(firestore, 'emergency_charging_requests'), where('status', '==', 'pending'));
   }, [firestore, isAdmin, isCheckingAdmin]);
 

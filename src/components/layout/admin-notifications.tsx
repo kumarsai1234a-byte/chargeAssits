@@ -10,20 +10,26 @@ import { formatDistanceToNow } from 'date-fns';
 
 export function AdminNotifications() {
   const firestore = useFirestore();
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
 
-  // This component is only rendered on admin pages.
-  // We rely on security rules to allow/deny this query.
-  // If a non-admin somehow sees this component, the query will fail,
-  // which is the correct, secure behavior.
   const pendingRequestsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    // This query will only succeed if the user is an admin.
+    // It is now gated by isUserLoading, and will only proceed if there is a user.
+    if (isUserLoading || !user || !firestore) {
+      return null;
+    }
     return query(collection(firestore, 'bookingRequests'), where('status', '==', 'pending'));
-  }, [firestore, user]);
+  }, [firestore, user, isUserLoading]);
 
 
-  const { data: pendingRequests } = useCollection<BookingRequest>(pendingRequestsQuery);
+  const { data: pendingRequests, error } = useCollection<BookingRequest>(pendingRequestsQuery);
   
+  // If there's an error (like permission denied), don't render the component.
+  // This gracefully handles non-admins.
+  if (error) {
+    return null;
+  }
+
   const pendingCount = pendingRequests?.length || 0;
 
   const formatDate = (timestamp: any) => {

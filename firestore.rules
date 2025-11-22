@@ -3,9 +3,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check for admin custom claim
+    // Helper function to check for an admin document.
+    // This is NOT the same as custom claims, but works for this app's structure.
     function isAdmin() {
-      return request.auth != null && request.auth.token.admin == true;
+      return request.auth != null && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
 
     // USERS can only read and write their own profile
@@ -19,23 +20,19 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // BOOKING REQUESTS can be created by any authenticated user,
-    // but only the user who created it can read it, and only admins can manage it.
+    // BOOKING REQUESTS can be created by any authenticated user.
+    // Users can only read THEIR OWN requests.
+    // Admins have full access to all requests.
     match /bookingRequests/{docId} {
-      // Any authenticated user can create a booking request
       allow create: if request.auth != null;
-
-      // A user can read their own booking request document
-      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // Admins have full list, read, update, and delete access
-      allow list, read, update, delete: if isAdmin();
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow list, update, delete: if isAdmin();
     }
-
-    // roles_admin collection is now deprecated in favor of custom claims,
-    // so it is locked down.
+    
+    // The roles_admin collection should be read-only for admins and inaccessible to others.
     match /roles_admin/{userId} {
-      allow read, write: if false;
+      allow get: if isAdmin();
+      allow list, create, update, delete: if false;
     }
   }
 }

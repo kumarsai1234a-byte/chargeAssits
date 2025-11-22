@@ -28,9 +28,9 @@ export function EmergencyTab() {
   const requestsQuery = useMemoFirebase(() => {
     // This query will only succeed if the user is an admin, per security rules.
     // We wait until the user is loaded to prevent premature queries.
-    if (!user || !firestore) return null;
+    if (isUserLoading || !user || !firestore) return null;
     return query(collection(firestore, 'bookingRequests'), orderBy('timestamp', 'desc'));
-  }, [firestore, user]);
+  }, [firestore, user, isUserLoading]);
 
   const { data: requests, isLoading, error } = useCollection<BookingRequest>(requestsQuery);
 

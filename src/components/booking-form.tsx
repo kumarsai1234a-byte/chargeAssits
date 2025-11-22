@@ -68,11 +68,11 @@ export function BookingForm({ station }: { station: Station }) {
       slotId: values.slotId,
       vehicleNumber: values.vehicleNumber,
       bookingTime: serverTimestamp(),
-      status: 'upcoming'
+      status: 'pending' // Changed from 'upcoming' to 'pending'
     }).then(() => {
         toast({
-          title: "Booking Successful!",
-          description: `Slot ${values.slotId.split('-')[1]} at ${station.name} has been booked for you.`,
+          title: "Booking Request Sent!",
+          description: `Your request for slot ${values.slotId.split('-')[1]} is pending admin approval.`,
           variant: 'default',
           className: 'bg-accent text-accent-foreground border-accent'
         });
@@ -130,7 +130,7 @@ export function BookingForm({ station }: { station: Station }) {
         />
         <Button type="submit" className="w-full" disabled={availableSlots.length === 0 || isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Book Now
+          Request Booking
         </Button>
       </form>
     </Form>

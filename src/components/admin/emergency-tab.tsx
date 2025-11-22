@@ -1,7 +1,7 @@
 
 'use client';
 
-import { EmergencyRequest, FriendsBooking, Station } from "@/lib/data";
+import { Booking, EmergencyRequest, FriendsBooking, Station, UserProfile } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -12,15 +12,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Phone, Car, Clock, Pin } from "lucide-react";
+import { Check, X, Phone, Car, Clock, Pin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from "@/firebase";
-import { collection, doc, query, where, orderBy, getDoc, runTransaction } from "firebase/firestore";
+import { collection, doc, query, where, orderBy, getDoc, runTransaction, collectionGroup } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
 import { format } from 'date-fns';
 import { Separator } from "../ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import React from "react";
+
+type CombinedBooking = (FriendsBooking & { bookingSource: 'friends' }) | (Booking & UserProfile & { bookingSource: 'users' });
 
 export function EmergencyTab() {
   const firestore = useFirestore();
@@ -33,17 +36,35 @@ export function EmergencyTab() {
 
   const friendsBookingsQuery = useMemoFirebase(() => {
     if(!firestore) return null;
-    return query(collection(firestore, 'friendsBookings'), orderBy('createdAt', 'desc'));
+    return query(collection(firestore, 'friendsBookings'), where('status', '==', 'pending'), orderBy('createdAt', 'desc'));
   }, [firestore]);
+
+  const userBookingsQuery = useMemoFirebase(() => {
+      if(!firestore) return null;
+      return query(collectionGroup(firestore, 'bookings'), where('status', '==', 'pending'));
+  }, [firestore])
 
   const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
   const { data: friendsBookings, isLoading: friendsLoading } = useCollection<FriendsBooking>(friendsBookingsQuery);
+  const { data: userBookings, isLoading: userBookingsLoading } = useCollection<Booking>(userBookingsQuery);
 
-  const handleStatusUpdate = async (bookingId: string, newStatus: 'approved' | 'denied') => {
+ const combinedBookings: CombinedBooking[] = React.useMemo(() => {
+    const friendData = friendsBookings ? friendsBookings.map(b => ({ ...b, bookingSource: 'friends' as const })) : [];
+    const userData = userBookings ? userBookings.map(b => ({ ...b, name: 'Registered User', phoneNumber: 'N/A', duration: 'N/A', type: 'standard' as const, bookingSource: 'users' as const })) : [];
+    return [...friendData, ...userData].sort((a, b) => {
+        const timeA = a.createdAt || a.bookingTime;
+        const timeB = b.createdAt || b.bookingTime;
+        return timeB?.toDate() - timeA?.toDate();
+    });
+ }, [friendsBookings, userBookings]);
+
+  const handleStatusUpdate = async (booking: CombinedBooking, newStatus: 'approved' | 'denied') => {
     if (!firestore) return;
     
-    const bookingRef = doc(firestore, 'friendsBookings', bookingId);
-    let bookingData: FriendsBooking | null = null;
+    const isUserBooking = booking.bookingSource === 'users';
+    const bookingRef = isUserBooking 
+        ? doc(firestore, 'users', (booking as Booking).userId, 'bookings', booking.id)
+        : doc(firestore, 'friendsBookings', booking.id);
 
     try {
         await runTransaction(firestore, async (transaction) => {
@@ -51,53 +72,36 @@ export function EmergencyTab() {
             if (!bookingDoc.exists()) {
                 throw "Booking document does not exist!";
             }
-            bookingData = bookingDoc.data() as FriendsBooking;
+            const currentBookingData = bookingDoc.data();
 
-            // Only perform station updates if approving a standard booking
-            if (newStatus === 'approved' && bookingData.type === 'standard') {
-                const stationRef = doc(firestore, 'charging_stations', bookingData.stationId);
+            if (newStatus === 'approved' && currentBookingData.status === 'pending') {
+                const stationRef = doc(firestore, 'charging_stations', currentBookingData.stationId || currentBookingData.chargingStationId);
                 const stationDoc = await transaction.get(stationRef);
 
-                if (!stationDoc.exists()) {
-                    throw "Station document does not exist!";
-                }
-
-                const stationData = stationDoc.data() as Station;
-                const slots = stationData.slots;
-                const slotIndex = slots.findIndex(s => s.id === bookingData!.slotId);
-
-                if (slotIndex === -1) {
-                    throw `Slot ${bookingData.slotId} not found in station.`;
-                }
-
-                // This is the crucial check.
-                if (slots[slotIndex].status !== 'available') {
-                    throw `Slot ${bookingData.slotId.split('-')[1]} is no longer available.`;
-                }
-
-                // If we reach here, the slot is available. Now we perform the writes.
-                const updatedSlots = [...slots];
-                updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], status: 'occupied' };
+                if (!stationDoc.exists()) throw "Station document does not exist!";
                 
-                // Write #1: Update the station
+                const stationData = stationDoc.data() as Station;
+                const slotIndex = stationData.slots.findIndex(s => s.id === currentBookingData.slotId);
+
+                if (slotIndex === -1) throw `Slot ${currentBookingData.slotId} not found in station.`;
+                if (stationData.slots[slotIndex].status !== 'available') {
+                    throw `Slot ${stationData.slots[slotIndex].id.split('-')[1]} is no longer available.`;
+                }
+
+                const updatedSlots = [...stationData.slots];
+                updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], status: 'occupied' };
                 transaction.update(stationRef, { slots: updatedSlots });
             }
             
-            // Write #2: Update the booking status (for both approval and denial)
             transaction.update(bookingRef, { status: newStatus });
         });
 
-        if (bookingData) {
-            toast({ 
-                title: `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-                description: `Please notify the user at ${bookingData.phoneNumber}.`,
-                variant: 'default',
-                className: 'bg-accent text-accent-foreground border-accent',
-            });
-        } else {
-             toast({ title: "Success", description: `Booking status updated to ${newStatus}.` });
-        }
-
+        toast({ 
+            title: `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
+            description: `Booking for ${isUserBooking ? booking.stationName : (booking as FriendsBooking).name} has been updated.`,
+            variant: 'default',
+            className: 'bg-accent text-accent-foreground border-accent',
+        });
 
     } catch (error: any) {
         console.error("Transaction failed: ", error);
@@ -115,12 +119,12 @@ export function EmergencyTab() {
     return format(date, 'MMMM dd, yyyy');
   }
 
-  const isLoading = emergencyLoading || friendsLoading;
+  const isLoading = emergencyLoading || friendsLoading || userBookingsLoading;
 
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-2xl font-headline font-bold mb-4">Friends Bookings</h2>
+        <h2 className="text-2xl font-headline font-bold mb-4">Pending Booking Requests</h2>
          <div className="hidden md:block rounded-md border">
             <Table>
                 <TableHeader>
@@ -134,28 +138,33 @@ export function EmergencyTab() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                   {friendsLoading && [...Array(2)].map((_, i) => (
+                   {isLoading && [...Array(2)].map((_, i) => (
                        <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
                    ))}
-                   {friendsBookings?.map(booking => (
+                   {combinedBookings.map(booking => (
                        <TableRow key={booking.id}>
-                           <TableCell className="font-medium">{booking.name}</TableCell>
+                           <TableCell className="font-medium">
+                               <div className="flex items-center gap-2">
+                                {booking.bookingSource === 'users' ? <User className="size-4 text-muted-foreground" /> : <Phone className="size-4 text-muted-foreground" />}
+                                <span>{booking.name}</span>
+                               </div>
+                            </TableCell>
                            <TableCell>
                                <div className="flex flex-col gap-1 text-sm">
-                                   <span className="flex items-center gap-2"><Phone /> {booking.phoneNumber}</span>
+                                   {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Phone /> {booking.phoneNumber}</span>}
                                    <span className="flex items-center gap-2"><Car /> {booking.vehicleNumber}</span>
-                                   <span className="flex items-center gap-2"><Clock /> {booking.duration} mins</span>
+                                   {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Clock /> {booking.duration} mins</span>}
                                    {booking.type === 'emergency' && <span className="flex items-center gap-2"><Pin /> {booking.location}</span>}
                                </div>
                            </TableCell>
                            <TableCell><Badge variant={booking.type === 'emergency' ? 'destructive': 'secondary'}>{booking.type}</Badge></TableCell>
-                           <TableCell>{formatDate(booking.createdAt)}</TableCell>
-                           <TableCell className="text-center"><Badge variant="outline" className={cn({ "text-yellow-400 border-yellow-400": booking.status === 'pending', "text-accent border-accent": booking.status === 'approved', "text-red-400 border-red-400": booking.status === 'denied' })}>{booking.status}</Badge></TableCell>
+                           <TableCell>{formatDate(booking.createdAt || booking.bookingTime)}</TableCell>
+                           <TableCell className="text-center"><Badge variant="outline" className="text-yellow-400 border-yellow-400">{booking.status}</Badge></TableCell>
                            <TableCell className="text-center">
                                {booking.status === 'pending' && (
                                    <div className="flex gap-2 justify-center">
-                                       <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking.id, 'approved')}><Check className="h-4 w-4" /></Button>
-                                       <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking.id, 'denied')}><X className="h-4 w-4" /></Button>
+                                       <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking, 'approved')}><Check className="h-4 w-4" /></Button>
+                                       <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking, 'denied')}><X className="h-4 w-4" /></Button>
                                    </div>
                                )}
                            </TableCell>
@@ -165,34 +174,38 @@ export function EmergencyTab() {
             </Table>
          </div>
          <div className="grid gap-4 md:hidden">
-            {friendsLoading && [...Array(2)].map((_, i) => (<Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>))}
-            {friendsBookings?.map(booking => (
+            {isLoading && [...Array(2)].map((_, i) => (<Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>))}
+            {combinedBookings.map(booking => (
                 <Card key={booking.id}>
                     <CardHeader>
                         <CardTitle className="flex justify-between items-center">
-                            <span>{booking.name}</span>
-                            <Badge variant="outline" className={cn({ "text-yellow-400 border-yellow-400": booking.status === 'pending', "text-accent border-accent": booking.status === 'approved', "text-red-400 border-red-400": booking.status === 'denied' })}>{booking.status}</Badge>
+                             <div className="flex items-center gap-2">
+                                {booking.bookingSource === 'users' ? <User className="size-5 text-muted-foreground" /> : <Phone className="size-5 text-muted-foreground" />}
+                                <span>{booking.name}</span>
+                               </div>
+                            <Badge variant="outline" className="text-yellow-400 border-yellow-400">{booking.status}</Badge>
                         </CardTitle>
-                        <CardDescription>{formatDate(booking.createdAt)}</CardDescription>
+                        <CardDescription>{formatDate(booking.createdAt || booking.bookingTime)}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex flex-col gap-2 text-sm">
                             <Badge variant={booking.type === 'emergency' ? 'destructive': 'secondary'} className="w-fit">{booking.type}</Badge>
-                            <span className="flex items-center gap-2"><Phone /> {booking.phoneNumber}</span>
+                            {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Phone /> {booking.phoneNumber}</span>}
                             <span className="flex items-center gap-2"><Car /> {booking.vehicleNumber}</span>
-                            <span className="flex items-center gap-2"><Clock /> {booking.duration} mins</span>
+                            {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Clock /> {booking.duration} mins</span>}
                             {booking.type === 'emergency' && <span className="flex items-center gap-2"><Pin /> {booking.location}</span>}
                         </div>
                         {booking.status === 'pending' && (
                              <div className="flex gap-2 justify-end">
-                                <Button variant="outline" className="text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking.id, 'approved')}><Check className="mr-2 h-4 w-4" />Approve</Button>
-                                <Button variant="outline" className="text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking.id, 'denied')}><X className="mr-2 h-4 w-4" />Deny</Button>
+                                <Button variant="outline" className="text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking, 'approved')}><Check className="mr-2 h-4 w-4" />Approve</Button>
+                                <Button variant="outline" className="text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking, 'denied')}><X className="mr-2 h-4 w-4" />Deny</Button>
                             </div>
                         )}
                     </CardContent>
                 </Card>
             ))}
          </div>
+         { !isLoading && combinedBookings.length === 0 && <p className="text-center text-muted-foreground py-4">No pending requests.</p>}
       </section>
 
       <Separator />
@@ -242,6 +255,7 @@ export function EmergencyTab() {
                   </TableCell>
                 </TableRow>
               ))}
+                {!emergencyLoading && emergencyRequests?.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-4">No emergency requests.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </div>
@@ -271,10 +285,9 @@ export function EmergencyTab() {
               </CardContent>
             </Card>
           ))}
+           {!emergencyLoading && emergencyRequests?.length === 0 && <p className="text-center text-muted-foreground py-4">No emergency requests.</p>}
         </div>
       </section>
     </div>
   );
 }
-
-    

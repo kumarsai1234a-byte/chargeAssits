@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Pencil, CheckCircle, XCircle, Clock, Hourglass } from "lucide-react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, orderBy } from "firebase/firestore";
 import type { Booking } from "@/lib/data";
 import { format } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 export default function ProfilePage() {
     const { user, isUserLoading } = useUser();
@@ -73,16 +74,18 @@ export default function ProfilePage() {
         return format(date, 'MMMM dd, yyyy - h:mm a');
     }
     
-    const getStatusIcon = (status: Booking['status']) => {
+    const getStatusInfo = (status: Booking['status']) => {
         switch (status) {
-            case 'upcoming':
-                return <CheckCircle className="text-accent" />;
-            case 'cancelled':
-                return <XCircle className="text-destructive" />;
+            case 'approved':
+                return { icon: <CheckCircle className="text-accent" />, text: "Approved", className: 'bg-accent text-accent-foreground border-accent' };
+            case 'denied':
+                return { icon: <XCircle className="text-destructive" />, text: "Denied", className: 'bg-destructive text-destructive-foreground border-destructive' };
+            case 'pending':
+                 return { icon: <Hourglass className="text-yellow-500" />, text: "Pending", className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' };
             case 'completed':
-                return <Clock className="text-muted-foreground" />;
+                return { icon: <Clock className="text-muted-foreground" />, text: "Completed", className: 'bg-secondary text-secondary-foreground' };
             default:
-                return null;
+                return { icon: <Clock className="text-muted-foreground" />, text: "Unknown", className: '' };
         }
     }
 
@@ -113,8 +116,8 @@ export default function ProfilePage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="font-headline">Booking History & Notifications</CardTitle>
-                        <CardDescription>Check the status of your recent charging sessions below. Updates from the admin will appear here.</CardDescription>
+                        <CardTitle className="font-headline">Booking History & Status</CardTitle>
+                        <CardDescription>Check the status of your recent charging requests below. Updates from the admin will appear here.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {areBookingsLoading && (
@@ -126,37 +129,35 @@ export default function ProfilePage() {
                         )}
                         {!areBookingsLoading && bookings && bookings.length > 0 ? (
                              <ul className="space-y-4">
-                                {bookings.map((booking, index) => (
-                                    <React.Fragment key={booking.id}>
-                                        <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="hidden sm:block">
-                                                    {getStatusIcon(booking.status)}
+                                {bookings.map((booking, index) => {
+                                    const statusInfo = getStatusInfo(booking.status);
+                                    return (
+                                        <React.Fragment key={booking.id}>
+                                            <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="hidden sm:block">
+                                                        {statusInfo.icon}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold">{booking.stationName} - Slot {booking.slotId.split('-')[1]}</p>
+                                                        <p className="text-sm text-muted-foreground">{formatDate(booking.bookingTime)}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-semibold">{booking.stationName} - Slot {booking.slotId.split('-')[1]}</p>
-                                                    <p className="text-sm text-muted-foreground">{formatDate(booking.bookingTime)}</p>
-                                                </div>
-                                            </div>
-                                            <Badge variant={booking.status === 'upcoming' ? 'default' : booking.status === 'cancelled' ? 'destructive' : 'secondary'}
-                                                className={cn('w-full sm:w-auto justify-center', {
-                                                    'bg-accent text-accent-foreground border-accent': booking.status === 'upcoming',
-                                                    'bg-destructive text-destructive-foreground': booking.status === 'cancelled',
-                                                })}>
-                                                {booking.status === 'upcoming' && "Approved / Upcoming"}
-                                                {booking.status === 'cancelled' && "Denied / Cancelled"}
-                                                {booking.status === 'completed' && "Completed"}
-                                            </Badge>
-                                        </li>
-                                        {index < bookings.length - 1 && <Separator />}
-                                    </React.Fragment>
-                                ))}
+                                                <Badge variant="outline"
+                                                    className={cn('w-full sm:w-auto justify-center', statusInfo.className)}>
+                                                    {statusInfo.text}
+                                                </Badge>
+                                            </li>
+                                            {index < bookings.length - 1 && <Separator />}
+                                        </React.Fragment>
+                                    )
+                                })}
                             </ul>
                         ) : (
                            !areBookingsLoading && 
                            <div className="text-center py-8">
                                 <p className="text-muted-foreground">You have no booking history.</p>
-                                <Button variant="link" asChild><a href="/dashboard">Book a slot to get started.</a></Button>
+                                <Button variant="link" asChild><Link href="/dashboard">Book a slot to get started.</Link></Button>
                            </div>
                         )}
                     </CardContent>

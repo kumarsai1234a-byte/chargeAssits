@@ -60,7 +60,7 @@ export type Booking = {
     slotId: string;
     vehicleNumber: string;
     bookingTime: any; // Firestore Timestamp
-    status: 'completed' | 'upcoming' | 'cancelled';
+    status: 'pending' | 'approved' | 'denied' | 'completed' | 'cancelled';
 }
 
 export type FriendsBooking = {

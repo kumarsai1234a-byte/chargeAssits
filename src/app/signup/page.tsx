@@ -51,7 +51,6 @@ export default function SignupPage() {
         createdAt: serverTimestamp(),
       };
       
-      // Using setDoc directly is better here to ensure it completes after user creation.
       await setDoc(userRef, userData);
 
       toast({
@@ -110,6 +109,7 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">Password must be at least 6 characters.</p>
             </div>
             <Button type="submit" className="w-full">
                 Create an account

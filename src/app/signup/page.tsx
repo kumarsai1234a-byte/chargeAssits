@@ -14,10 +14,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/layout/auth-layout"
-import { useAuth, useFirestore } from "@/firebase";
+import { useAuth, useFirestore, setDocumentNonBlocking } from "@/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, serverTimestamp } from "firebase/firestore";
+import { Loader2 } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,6 +37,17 @@ export default function SignupPage() {
         toast({ variant: "destructive", title: "Firebase not initialized."});
         return;
     }
+    
+    if (password.length < 6) {
+        toast({
+            variant: "destructive",
+            title: "Weak Password",
+            description: "Password should be at least 6 characters.",
+        });
+        return;
+    }
+
+    setIsLoading(true);
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -51,7 +64,8 @@ export default function SignupPage() {
         createdAt: serverTimestamp(),
       };
       
-      await setDoc(userRef, userData);
+      // Use non-blocking write
+      setDocumentNonBlocking(userRef, userData, { merge: false });
 
       toast({
         title: "Signup Successful",
@@ -66,6 +80,8 @@ export default function SignupPage() {
         title: "Signup Failed",
         description: error.message || "An unexpected error occurred.",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -88,16 +104,19 @@ export default function SignupPage() {
                   required 
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  disabled={isLoading}
                 />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>              <Input
+              <Label htmlFor="email">Email</Label>
+              <Input
                 id="email"
                 type="email"
                 placeholder="m@example.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
               />
             </div>
             <div className="grid gap-2">
@@ -108,10 +127,12 @@ export default function SignupPage() {
                 required 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground">Password must be at least 6 characters.</p>
             </div>
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create an account
             </Button>
           </form>

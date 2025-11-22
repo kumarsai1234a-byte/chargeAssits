@@ -25,6 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { Station } from "@/lib/data";
 import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
 import { collection, serverTimestamp } from "firebase/firestore";
+import { Loader2 } from "lucide-react";
+import { useState } from "react";
 
 const formSchema = z.object({
   vehicleNumber: z.string().min(3, "Vehicle number must be at least 3 characters."),
@@ -35,6 +37,7 @@ export function BookingForm({ station }: { station: Station }) {
   const { toast } = useToast();
   const firestore = useFirestore();
   const { user } = useUser();
+  const [isLoading, setIsLoading] = useState(false);
   const availableSlots = station.slots?.filter(s => s.status === "available") || [];
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -55,6 +58,8 @@ export function BookingForm({ station }: { station: Station }) {
       return;
     }
     
+    setIsLoading(true);
+
     const bookingsRef = collection(firestore, `users/${user.uid}/bookings`);
     addDocumentNonBlocking(bookingsRef, {
       userId: user.uid,
@@ -64,15 +69,23 @@ export function BookingForm({ station }: { station: Station }) {
       vehicleNumber: values.vehicleNumber,
       bookingTime: serverTimestamp(),
       status: 'upcoming'
+    }).then(() => {
+        toast({
+          title: "Booking Successful!",
+          description: `Slot ${values.slotId.split('-')[1]} at ${station.name} has been booked for you.`,
+          variant: 'default',
+          className: 'bg-accent text-accent-foreground border-accent'
+        });
+        form.reset();
+    }).catch(() => {
+        toast({
+            variant: "destructive",
+            title: "Booking Failed",
+            description: "Could not complete your booking. Please try again.",
+        });
+    }).finally(() => {
+        setIsLoading(false);
     });
-
-    toast({
-      title: "Booking Successful!",
-      description: `Slot ${values.slotId.split('-')[1]} at ${station.name} has been booked for you.`,
-      variant: 'default',
-      className: 'bg-accent text-accent-foreground border-accent'
-    });
-    form.reset();
   }
 
   return (
@@ -85,7 +98,7 @@ export function BookingForm({ station }: { station: Station }) {
             <FormItem>
               <FormLabel>Vehicle Number</FormLabel>
               <FormControl>
-                <Input placeholder="EV-12345" {...field} />
+                <Input placeholder="EV-12345" {...field} disabled={isLoading} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -97,7 +110,7 @@ export function BookingForm({ station }: { station: Station }) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Available Slot</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={availableSlots.length === 0}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={availableSlots.length === 0 || isLoading}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder={availableSlots.length > 0 ? "Select an available slot" : "No slots available"} />
@@ -115,7 +128,10 @@ export function BookingForm({ station }: { station: Station }) {
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full" disabled={availableSlots.length === 0}>Book Now</Button>
+        <Button type="submit" className="w-full" disabled={availableSlots.length === 0 || isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Book Now
+        </Button>
       </form>
     </Form>
   );

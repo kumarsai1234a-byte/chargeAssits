@@ -20,9 +20,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
 import { collection, serverTimestamp } from "firebase/firestore";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 
 const emergencyFormSchema = z.object({
-  vehicle: z.string().min(3, { message: "Vehicle details must be at least 3 characters." }),
+  vehicleType: z.string().min(3, { message: "Vehicle details must be at least 3 characters." }),
   location: z.string().min(10, { message: "Please provide a more detailed location." }),
   description: z.string().optional(),
 });
@@ -31,11 +33,12 @@ export default function EmergencyPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const { user } = useUser();
+  const [isLoading, setIsLoading] = useState(false);
 
   const form = useForm<z.infer<typeof emergencyFormSchema>>({
     resolver: zodResolver(emergencyFormSchema),
     defaultValues: {
-      vehicle: "",
+      vehicleType: "",
       location: "",
       description: "",
     },
@@ -51,24 +54,34 @@ export default function EmergencyPage() {
       return;
     }
 
+    setIsLoading(true);
     const requestsRef = collection(firestore, 'emergency_charging_requests');
+    
     addDocumentNonBlocking(requestsRef, {
         userId: user.uid,
         userName: user.displayName || user.email,
-        vehicle: values.vehicle,
+        vehicleType: values.vehicleType,
         location: values.location,
         description: values.description,
         requestTime: serverTimestamp(),
         status: 'pending'
+    }).then(() => {
+      toast({
+        title: "Emergency Request Sent",
+        description: "Our team will review your request and contact you shortly.",
+        variant: 'default',
+        className: 'bg-accent text-accent-foreground border-accent'
+      });
+      form.reset();
+    }).catch(() => {
+       toast({
+        variant: "destructive",
+        title: "Request Failed",
+        description: "Could not send your request. Please try again.",
+      });
+    }).finally(() => {
+      setIsLoading(false);
     });
-
-    toast({
-      title: "Emergency Request Sent",
-      description: "Our team will review your request and contact you shortly.",
-      variant: 'default',
-      className: 'bg-accent text-accent-foreground border-accent'
-    });
-    form.reset();
   }
 
   return (
@@ -85,12 +98,12 @@ export default function EmergencyPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <FormField
                 control={form.control}
-                name="vehicle"
+                name="vehicleType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Vehicle (Make and Model)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Tesla Model Y" {...field} />
+                      <Input placeholder="e.g., Tesla Model Y" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -106,6 +119,7 @@ export default function EmergencyPage() {
                       <Textarea
                         placeholder="Please be as specific as possible. e.g., 'Corner of 5th Ave and 34th St, near the Empire State Building'."
                         {...field}
+                        disabled={isLoading}
                       />
                     </FormControl>
                     <FormDescription>
@@ -125,13 +139,17 @@ export default function EmergencyPage() {
                       <Textarea
                         placeholder="Any other information that might be helpful."
                         {...field}
+                        disabled={isLoading}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" size="lg">Request Help Now</Button>
+              <Button type="submit" size="lg" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Request Help Now
+              </Button>
             </form>
           </Form>
         </CardContent>

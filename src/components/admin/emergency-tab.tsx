@@ -69,14 +69,14 @@ export function EmergencyTab() {
               <TableRow key={request.id}>
                 <TableCell className="font-medium">{request.userName}</TableCell>
                 <TableCell>{request.location}</TableCell>
-                <TableCell>{request.vehicle}</TableCell>
+                <TableCell>{request.vehicleType}</TableCell>
                 <TableCell>{formatDate(request.requestTime)}</TableCell>
                 <TableCell className="text-center">
                   <Badge
                     variant="outline"
                     className={cn({
                       "text-yellow-400 border-yellow-400": request.status === 'pending',
-                      "text-accent border-accent": request.status === 'approved' || request.status === 'completed',
+                      "text-accent border-accent": request.status === 'approved',
                       "text-red-400 border-red-400": request.status === 'denied',
                     })}
                   >
@@ -129,7 +129,7 @@ export function EmergencyTab() {
           <Card key={request.id}>
             <CardHeader>
               <CardTitle>{request.userName}</CardTitle>
-              <p className="text-sm text-muted-foreground">{request.vehicle} - {formatDate(request.requestTime)}</p>
+              <p className="text-sm text-muted-foreground">{request.vehicleType} - {formatDate(request.requestTime)}</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -141,7 +141,7 @@ export function EmergencyTab() {
                     variant="outline"
                     className={cn({
                       "text-yellow-400 border-yellow-400": request.status === 'pending',
-                      "text-accent border-accent": request.status === 'approved' || request.status === 'completed',
+                      "text-accent border-accent": request.status === 'approved',
                       "text-red-400 border-red-400": request.status === 'denied',
                     })}
                   >

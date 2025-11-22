@@ -1,6 +1,4 @@
-// This file is no longer the source of truth for data.
-// All data is now fetched directly from Firestore.
-// The types are still useful for defining the shape of our data.
+// This file contains type definitions for our Firestore data structures.
 
 export type Charger = {
   type: "AC" | "DC";
@@ -30,7 +28,7 @@ export type UserProfile = {
   id: string;
   name: string;
   email: string;
-  createdAt: string;
+  createdAt: any; // Firestore Timestamp
 };
 
 export type EmergencyRequest = {
@@ -38,9 +36,9 @@ export type EmergencyRequest = {
   userId: string;
   userName: string;
   location: string;
-  vehicle: string;
-  status: 'pending' | 'approved' | 'denied' | 'completed';
-  requestTime: string;
+  vehicleType: string;
+  status: 'pending' | 'approved' | 'denied';
+  requestTime: any; // Firestore Timestamp
 };
 
 export type Payment = {
@@ -58,12 +56,12 @@ export type Booking = {
     chargingStationId: string;
     stationName: string;
     slotId: string;
-    bookingTime: string;
+    vehicleNumber: string;
+    bookingTime: any; // Firestore Timestamp
     status: 'completed' | 'upcoming' | 'cancelled';
 }
 
-// Mock data is being removed as we are moving to Firestore.
-
+// Mock data is no longer used, but keeping one for the payments tab.
 export const payments: Payment[] = [
     { id: "pay-1", userId: "user-1", userName: "Alice Johnson", amount: 25.50, date: "2024-07-19", status: 'succeeded' },
     { id: "pay-2", userId: "user-2", userName: "Bob Williams", amount: 15.75, date: "2024-07-18", status: 'succeeded' },

@@ -16,9 +16,9 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/layout/header';
-import { useUser } from '@/firebase';
+import { useUser, useAuth } from '@/firebase';
+import { signOut } from 'firebase/auth';
 import { LayoutGrid, Zap, User, LogOut, ZapIcon } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
@@ -30,12 +30,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isUserLoading } = useUser();
+  const auth = useAuth();
 
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push('/login');
     }
   }, [isUserLoading, user, router]);
+  
+  const handleLogout = async () => {
+    if (!auth) return;
+    await signOut(auth);
+    router.push('/');
+  };
 
   if (isUserLoading) {
     return (
@@ -80,11 +87,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-          <Button variant="outline" className="w-full justify-start gap-2" asChild>
-            <Link href="/">
+          <Button variant="outline" className="w-full justify-start gap-2" onClick={handleLogout}>
               <LogOut className="size-4" />
               <span className="group-data-[collapsible=icon]:hidden">Logout</span>
-            </Link>
           </Button>
         </SidebarFooter>
       </Sidebar>

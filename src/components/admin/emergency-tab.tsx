@@ -46,29 +46,22 @@ export function EmergencyTab() {
 
     try {
         await runTransaction(firestore, async (transaction) => {
-            // --- ALL READS MUST COME BEFORE ALL WRITES ---
-
-            // 1. Read the booking document first.
             const bookingDoc = await transaction.get(bookingRef);
             if (!bookingDoc.exists()) {
                 throw "Booking document does not exist!";
             }
             const bookingData = bookingDoc.data() as FriendsBooking;
 
-            // 2. If approving, read the station document.
-            let stationRef, stationDoc;
+            // Only perform station updates if approving a standard booking
             if (newStatus === 'approved' && bookingData.type === 'standard') {
-                stationRef = doc(firestore, 'charging_stations', bookingData.stationId);
-                stationDoc = await transaction.get(stationRef);
+                const stationRef = doc(firestore, 'charging_stations', bookingData.stationId);
+                const stationDoc = await transaction.get(stationRef);
+
                 if (!stationDoc.exists()) {
                     throw "Station document does not exist!";
                 }
-            }
 
-            // --- ALL VALIDATION AND LOGIC USING READ DATA ---
-
-            if (newStatus === 'approved' && bookingData.type === 'standard') {
-                const stationData = stationDoc!.data() as Station;
+                const stationData = stationDoc.data() as Station;
                 const slots = stationData.slots;
                 const slotIndex = slots.findIndex(s => s.id === bookingData.slotId);
 
@@ -76,25 +69,21 @@ export function EmergencyTab() {
                     throw `Slot ${bookingData.slotId} not found in station.`;
                 }
 
+                // This is the crucial check.
                 if (slots[slotIndex].status !== 'available') {
                     throw `Slot ${bookingData.slotId.split('-')[1]} is no longer available.`;
                 }
-            }
 
-
-            // --- ALL WRITES AT THE END ---
-
-            // 3. Write the booking status update.
-            transaction.update(bookingRef, { status: newStatus });
-
-            // 4. If approved, write the station slot status update.
-            if (newStatus === 'approved' && bookingData.type === 'standard' && stationRef && stationDoc) {
-                const stationData = stationDoc.data() as Station;
-                const updatedSlots = stationData.slots.map(slot => 
-                    slot.id === bookingData.slotId ? { ...slot, status: 'occupied' } : slot
-                );
+                // If we reach here, the slot is available. Now we perform the writes.
+                const updatedSlots = [...slots];
+                updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], status: 'occupied' };
+                
+                // Write #1: Update the station
                 transaction.update(stationRef, { slots: updatedSlots });
             }
+            
+            // Write #2: Update the booking status (for both approval and denial)
+            transaction.update(bookingRef, { status: newStatus });
         });
 
         toast({ title: "Success", description: `Booking status updated to ${newStatus}.` });

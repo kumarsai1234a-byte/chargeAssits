@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Pencil } from "lucide-react";
+import { Pencil, CheckCircle, XCircle, Clock } from "lucide-react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { collection, query, orderBy } from "firebase/firestore";
 import type { Booking } from "@/lib/data";
@@ -72,6 +72,19 @@ export default function ProfilePage() {
         const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
         return format(date, 'MMMM dd, yyyy - h:mm a');
     }
+    
+    const getStatusIcon = (status: Booking['status']) => {
+        switch (status) {
+            case 'upcoming':
+                return <CheckCircle className="text-accent" />;
+            case 'cancelled':
+                return <XCircle className="text-destructive" />;
+            case 'completed':
+                return <Clock className="text-muted-foreground" />;
+            default:
+                return null;
+        }
+    }
 
     return (
         <AppLayout>
@@ -100,8 +113,8 @@ export default function ProfilePage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="font-headline">Booking History</CardTitle>
-                        <CardDescription>Check the status of your recent charging sessions below.</CardDescription>
+                        <CardTitle className="font-headline">Booking History & Notifications</CardTitle>
+                        <CardDescription>Check the status of your recent charging sessions below. Updates from the admin will appear here.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {areBookingsLoading && (
@@ -115,27 +128,36 @@ export default function ProfilePage() {
                              <ul className="space-y-4">
                                 {bookings.map((booking, index) => (
                                     <React.Fragment key={booking.id}>
-                                        <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                                            <div>
-                                                <p className="font-semibold">{booking.stationName} - Slot {booking.slotId.split('-')[1]}</p>
-                                                <p className="text-sm text-muted-foreground">{formatDate(booking.bookingTime)}</p>
+                                        <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className="hidden sm:block">
+                                                    {getStatusIcon(booking.status)}
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold">{booking.stationName} - Slot {booking.slotId.split('-')[1]}</p>
+                                                    <p className="text-sm text-muted-foreground">{formatDate(booking.bookingTime)}</p>
+                                                </div>
                                             </div>
-                                            <div className="text-left sm:text-right">
-                                                <Badge variant={booking.status === 'upcoming' ? 'default' : booking.status === 'cancelled' ? 'destructive' : 'secondary'}
-                                                    className={cn({
-                                                        'bg-accent text-accent-foreground': booking.status === 'upcoming',
-                                                        'bg-destructive text-destructive-foreground': booking.status === 'cancelled',
-                                                    })}>
-                                                    {booking.status}
-                                                </Badge>
-                                            </div>
+                                            <Badge variant={booking.status === 'upcoming' ? 'default' : booking.status === 'cancelled' ? 'destructive' : 'secondary'}
+                                                className={cn('w-full sm:w-auto justify-center', {
+                                                    'bg-accent text-accent-foreground border-accent': booking.status === 'upcoming',
+                                                    'bg-destructive text-destructive-foreground': booking.status === 'cancelled',
+                                                })}>
+                                                {booking.status === 'upcoming' && "Approved / Upcoming"}
+                                                {booking.status === 'cancelled' && "Denied / Cancelled"}
+                                                {booking.status === 'completed' && "Completed"}
+                                            </Badge>
                                         </li>
                                         {index < bookings.length - 1 && <Separator />}
                                     </React.Fragment>
                                 ))}
                             </ul>
                         ) : (
-                           !areBookingsLoading && <p className="text-muted-foreground">You have no booking history.</p>
+                           !areBookingsLoading && 
+                           <div className="text-center py-8">
+                                <p className="text-muted-foreground">You have no booking history.</p>
+                                <Button variant="link" asChild><a href="/dashboard">Book a slot to get started.</a></Button>
+                           </div>
                         )}
                     </CardContent>
                 </Card>

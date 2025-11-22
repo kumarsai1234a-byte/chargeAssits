@@ -22,7 +22,6 @@ import { LayoutGrid, Zap, User, LogOut, ZapIcon } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
-  { href: '/emergency', label: 'Emergency', icon: <Zap /> },
   { href: '/profile', label: 'Profile', icon: <User /> },
 ];
 

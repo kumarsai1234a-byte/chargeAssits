@@ -26,7 +26,7 @@ export default function Home() {
       <main className="flex-1">
         <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48">
           <div className="container px-4 md:px-6">
-            <div className="grid gap-6 lg:grid-cols-[1fr_500px] lg:gap-12 xl:grid-cols-[1fr_600px]">
+            <div className="grid gap-6 lg:grid-cols-2 lg:gap-12 xl:grid-cols-[1fr_600px]">
               <div className="flex flex-col justify-center space-y-4 text-center lg:text-left">
                 <div className="space-y-2">
                   <h1 className="text-4xl font-headline font-bold tracking-tighter sm:text-5xl xl:text-6xl/none bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary">
@@ -50,7 +50,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-center justify-center">
-                 <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md">
+                 <div className="relative w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-none">
                     <div className="absolute inset-0.5 bg-gradient-to-r from-primary via-accent to-primary rounded-full blur-xl opacity-50"></div>
                     <Zap className="relative w-full h-auto text-primary/30" strokeWidth={0.5}/>
                  </div>

@@ -17,9 +17,10 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/layout/header';
-import { Shield, LayoutGrid, LogOut, ZapIcon } from 'lucide-react';
+import { Shield, LayoutGrid, LogOut, ZapIcon, Home } from 'lucide-react';
 import { useUser, useAuth } from '@/firebase';
 import { signOut } from 'firebase/auth';
+import { useAdmin } from '@/hooks/use-admin';
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
@@ -29,13 +30,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isUserLoading } = useUser();
+  const { isAdmin, isCheckingAdmin } = useAdmin();
   const auth = useAuth();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
+    // Wait until both user loading and admin check are complete
+    if (!isUserLoading && !isCheckingAdmin) {
+      if (!user) {
+        // If no user, redirect to login
+        router.push('/login');
+      } else if (!isAdmin) {
+        // If user is not an admin, redirect to user dashboard
+        router.push('/dashboard');
+      }
     }
-  }, [isUserLoading, user, router]);
+  }, [isUserLoading, isCheckingAdmin, user, isAdmin, router]);
 
   const handleLogout = async () => {
     if (auth) {
@@ -44,18 +53,21 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (isUserLoading) {
+  // Show a loading state while we verify admin privileges
+  if (isUserLoading || isCheckingAdmin) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="flex flex-col items-center gap-4">
             <Shield className="h-12 w-12 animate-pulse text-primary" />
-            <p className="text-muted-foreground">Securing admin area...</p>
+            <p className="text-muted-foreground">Verifying admin access...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
+  // If checks are done and user is not an admin, they will be redirected.
+  // Render null while redirect is happening.
+  if (!isAdmin) {
     return null;
   }
   
@@ -84,6 +96,17 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuItem>
             ))}
+             <SidebarMenuItem>
+                <Link href="/dashboard">
+                  <SidebarMenuButton 
+                    tooltip={"User Dashboard"}
+                    className="justify-start"
+                  >
+                    <Home />
+                    <span>User Dashboard</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">

@@ -123,10 +123,22 @@ service cloud.firestore {
      * @deny A regular user cannot read or update another user's booking.
      */
     match /bookings/{bookingId} {
-        allow get, list, update: if isAdmin();
+        allow get, list, update, delete: if isAdmin();
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow delete: if false;
     }
+
+     /**
+     * @description Publicly-writable collection for guest booking requests.
+     * @path /friendsBookings/{bookingId}
+     * @allow (create) Anyone can create a booking request.
+     * @allow (read, update, delete) Only admins can manage these requests.
+     * @deny A non-admin user cannot read or modify any friend booking.
+     */
+    match /friendsBookings/{bookingId} {
+        allow get, list, update, delete: if isAdmin();
+        allow create: if true;
+    }
+
 
     /**
      * @description Manages public charging station information.
@@ -138,9 +150,7 @@ service cloud.firestore {
      */
     match /charging_stations/{chargingStationId} {
       allow get, list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() && resource != null;
-      allow delete: if isAdmin() && resource != null;
+      allow create, update, delete: if isAdmin();
     }
 
     /**
@@ -158,8 +168,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       // Note: Admins may need update access later to change the `status` field.
       // This can be added with: `|| (isAdmin() && resource != null)`
-      allow update: if isOwner(resource.data.userId) && resource != null;
-      allow delete: if isOwner(resource.data.userId) && resource != null;
+      allow update, delete: if (isOwner(resource.data.userId) && resource != null) || isAdmin();
     }
 
     /**
@@ -170,11 +179,7 @@ service cloud.firestore {
      * @principle Secure by default. Prevents privilege escalation and admin enumeration from the client-side.
      */
     match /roles_admin/{userId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow get, list, create, update, delete: if false;
     }
   }
 }

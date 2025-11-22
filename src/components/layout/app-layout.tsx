@@ -18,17 +18,20 @@ import { Button } from '@/components/ui/button';
 import { Header } from '@/components/layout/header';
 import { useUser, useAuth } from '@/firebase';
 import { signOut } from 'firebase/auth';
-import { LayoutGrid, Zap, User, LogOut, ZapIcon } from 'lucide-react';
+import { LayoutGrid, Zap, User, LogOut, ZapIcon, ShieldAlert } from 'lucide-react';
+import { useAdmin } from '@/hooks/use-admin';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
   { href: '/profile', label: 'Profile', icon: <User /> },
+  { href: '/emergency', label: 'Emergency', icon: <ShieldAlert /> },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isUserLoading } = useUser();
+  const { isAdmin } = useAdmin();
   const auth = useAuth();
 
   useEffect(() => {
@@ -83,6 +86,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuItem>
             ))}
+            {isAdmin && (
+               <SidebarMenuItem>
+                <Link href="/admin/dashboard">
+                  <SidebarMenuButton
+                    isActive={pathname.startsWith('/admin')}
+                    tooltip="Admin"
+                    className="justify-start"
+                  >
+                    <Zap />
+                    <span>Admin Panel</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            )}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">

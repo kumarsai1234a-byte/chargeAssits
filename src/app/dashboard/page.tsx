@@ -20,12 +20,11 @@ export default function DashboardPage() {
   }, [firestore]);
   const { data: stations, isLoading } = useCollection<Station>(stationsQuery);
 
-  const station = stations?.[0]; // We only have one station
-
   const renderStationCard = (station: Station) => {
+    if (!station.id) return null;
     const availableSlots = station.slots?.filter(s => s.status === 'available').length || 0;
     return (
-        <Card>
+        <Card key={station.id}>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">{station.name}</CardTitle>
             <CardDescription>{station.address}</CardDescription>
@@ -74,7 +73,14 @@ export default function DashboardPage() {
             </Card>
             <div className="space-y-4">
                 {isLoading && renderSkeleton()}
-                {station && station.id && renderStationCard(station)}
+                {!isLoading && stations && stations.map(renderStationCard)}
+                {!isLoading && (!stations || stations.length === 0) && (
+                  <Card>
+                    <CardContent className="pt-6">
+                      <p className="text-muted-foreground">No charging stations found.</p>
+                    </CardContent>
+                  </Card>
+                )}
             </div>
         </div>
       </div>

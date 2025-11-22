@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState } from "react";
 import type { Station } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,32 +13,103 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { useCollection, useFirestore, useMemoFirebase, deleteDocumentNonBlocking } from "@/firebase";
+import { collection, doc } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
+import { StationForm } from "./station-form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 export function StationsTab() {
   const firestore = useFirestore();
+  const { toast } = useToast();
   const stationsQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'charging_stations');
   }, [firestore]);
-  const { data: stations, isLoading } = useCollection<Station>(stationsQuery);
+  const { data: stations, isLoading, error } = useCollection<Station>(stationsQuery);
+
+  const [isFormOpen, setFormOpen] = useState(false);
+  const [isAlertOpen, setAlertOpen] = useState(false);
+  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+
+  const handleAddClick = () => {
+    setSelectedStation(null);
+    setFormOpen(true);
+  };
+
+  const handleEditClick = (station: Station) => {
+    setSelectedStation(station);
+    setFormOpen(true);
+  };
+
+  const handleDeleteClick = (station: Station) => {
+    setSelectedStation(station);
+    setAlertOpen(true);
+  };
+  
+  const confirmDelete = () => {
+    if (firestore && selectedStation) {
+      const stationRef = doc(firestore, "charging_stations", selectedStation.id);
+      deleteDocumentNonBlocking(stationRef);
+      toast({ title: "Station Deleted", description: `"${selectedStation.name}" has been removed.` });
+    }
+    setAlertOpen(false);
+    setSelectedStation(null);
+  };
+
+  const handleFormSubmit = () => {
+     // This could be used to trigger a re-fetch if useCollection didn't update automatically
+  };
 
   return (
     <div>
       <div className="flex justify-end mb-4">
-        <Button><PlusCircle className="mr-2 size-4"/> Add Station</Button>
+        <Button onClick={handleAddClick}><PlusCircle className="mr-2 size-4"/> Add Station</Button>
       </div>
+
+      <StationForm
+        station={selectedStation}
+        open={isFormOpen}
+        onOpenChange={setFormOpen}
+        onFormSubmit={handleFormSubmit}
+      />
+      
+      <AlertDialog open={isAlertOpen} onOpenChange={setAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the
+              station "{selectedStation?.name}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Desktop View */}
       <div className="hidden md:block rounded-md border">
         <Table>
@@ -87,14 +159,24 @@ export function StationsTab() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>Delete</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => handleEditClick(station)}>Edit</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => handleDeleteClick(station)} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                           <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
             })}
+             {!isLoading && (!stations || stations.length === 0) && (
+              <TableRow>
+                <TableCell colSpan={5} className="h-24 text-center">
+                  No stations found.
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
@@ -143,8 +225,11 @@ export function StationsTab() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>Delete</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => handleEditClick(station)}>Edit</DropdownMenuItem>
+                         <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => handleDeleteClick(station)} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                           <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -161,6 +246,11 @@ export function StationsTab() {
             </Card>
           );
         })}
+        {!isLoading && (!stations || stations.length === 0) && (
+            <p className="text-muted-foreground text-center py-8">
+                No stations found.
+            </p>
+        )}
       </div>
     </div>
   );

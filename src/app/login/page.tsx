@@ -23,6 +23,7 @@ export default function LoginPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth) return;
     setIsLoading(true);
 
     signInWithEmailAndPassword(auth, email, password)
@@ -35,7 +36,9 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Login Failed",
-          description: "Please check your email and password.",
+          description: error.code === 'auth/invalid-credential' 
+            ? "Invalid credentials. Please check your email and password."
+            : "An unexpected error occurred. Please try again.",
         });
       })
       .finally(() => {

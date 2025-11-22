@@ -1,3 +1,4 @@
+
 // This file contains type definitions for our Firestore data structures.
 
 export type Charger = {
@@ -39,6 +40,7 @@ export type EmergencyRequest = {
   vehicleType: string;
   status: 'pending' | 'approved' | 'denied';
   requestTime: any; // Firestore Timestamp
+  description?: string;
 };
 
 export type Payment = {
@@ -61,7 +63,7 @@ export type Booking = {
     status: 'completed' | 'upcoming' | 'cancelled';
 }
 
-// Mock data is no longer used, but keeping one for the payments tab.
+// Mock data is no longer used for most things, but keeping one for the payments tab as an example.
 export const payments: Payment[] = [
     { id: "pay-1", userId: "user-1", userName: "Alice Johnson", amount: 25.50, date: "2024-07-19", status: 'succeeded' },
     { id: "pay-2", userId: "user-2", userName: "Bob Williams", amount: 15.75, date: "2024-07-18", status: 'succeeded' },

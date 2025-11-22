@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -37,8 +38,10 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   }, [isUserLoading, user, router]);
 
   const handleLogout = async () => {
-    await signOut(auth);
-    router.push('/');
+    if (auth) {
+      await signOut(auth);
+      router.push('/');
+    }
   };
 
   if (isUserLoading) {

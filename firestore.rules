@@ -1,0 +1,166 @@
+rules_version = '2';
+
+/**
+ * @name ChargeAssist Firestore Security Rules
+ * @author AI-Generated (Prototyping Mode)
+ *
+ * @description
+ * This ruleset is designed for the ChargeAssist application, providing a secure
+ * yet flexible data access layer suitable for rapid development and iteration.
+ *
+ * @philosophy
+ * Core Philosophy: The security model employs a hybrid approach. It uses strict,
+ * path-based ownership for user-specific data (like profiles and bookings) to
+ * ensure privacy. For administrative functions, it uses Database-Based Access
+ * Control (DBAC), where admin privileges are granted by the existence of a
+ * document in a specific roles collection. Public data, like charging stations,
+ * is readable by all users to facilitate discovery.
+ *
+ * @structure
+ * Data Structure:
+ * - /users/{userId} - Private user profile.
+ * - /users/{userId}/bookings/{bookingId} - A user's private bookings, nested
+ *   to enforce ownership.
+ * - /charging_stations/{chargingStationId} - Publicly viewable charging stations,
+ *   managed by admins.
+ * - /emergency_charging_requests/{emergencyChargingRequestId} - Requests created
+ *   by users, viewable by the creator and admins.
+ * - /roles_admin/{userId} - A private lookup collection to designate admins.
+ *   This collection should be managed securely via the Firebase Console or a
+ *   trusted backend, and is not client-accessible.
+ *
+ * @decisions
+ * Key Security Decisions:
+ * - Default Deny: All paths are closed by default. Access is granted explicitly.
+ * - User Data Privacy: The top-level `/users` collection cannot be listed,
+ *   preventing enumeration of all application users.
+ * - Admin Control: A dedicated `/roles_admin` collection serves as the single
+ *   source of truth for administrative privileges, simplifying rules that
+ *   require elevated permissions.
+ * - Denormalization for Security: Documents like 'Booking' and
+ *   'EmergencyChargingRequest' contain a denormalized 'userId' field. This
+ *   avoids costly and complex `get()` calls in security rules, allowing for
+ *   fast, direct authorization checks on the document being accessed.
+ *
+ * @prototyping
+ * This is a PROTOTYPING ruleset. It strictly enforces *authorization* (who can
+ * access what) but does not enforce data *shape* or *types*. This allows the
+ * client-side application schema to evolve without requiring constant rule updates.
+ * Validation is limited to fields critical for establishing ownership and
+ * relational integrity.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -------------------------------------------------------------------------
+    // Helper Functions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns true if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the authenticated user's UID matches the provided userId.
+     * This is the foundation of the user ownership model.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the authenticated user is an administrator.
+     * Admin status is granted if a document with the user's UID exists
+     * in the private /roles_admin collection.
+     */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * @description Manages user profile documents.
+     * @path /users/{userId}
+     * @allow (create) A newly signed-up user (uid: 'user123') creates their own profile document at `/users/user123`.
+     * @deny (get) User 'user456' tries to read the profile of 'user123'.
+     * @deny (list) Any user tries to list the entire `/users` collection.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Manages a user's private bookings.
+     * @path /users/{userId}/bookings/{bookingId}
+     * @allow (create) User 'user123' creates a new booking at `/users/user123/bookings/booking456` with `userId: 'user123'` in the data.
+     * @deny (get) User 'user789' tries to read a booking at `/users/user123/bookings/booking456`.
+     * @deny (update) User 'user123' tries to change the `userId` field on an existing booking.
+     * @principle Enforces strict path-based ownership and relational data integrity.
+     */
+    match /users/{userId}/bookings/{bookingId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isOwner(userId) && resource != null && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Manages public charging station information.
+     * @path /charging_stations/{chargingStationId}
+     * @allow (get, list) Any user, signed in or not, can read the list of charging stations.
+     * @deny (create) A non-admin user tries to create a new charging station.
+     * @principle Implements a "Public Read with Admin-Only Writes" model.
+     */
+    match /charging_stations/{chargingStationId} {
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource != null;
+      allow delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Manages user-submitted emergency charging requests.
+     * @path /emergency_charging_requests/{emergencyChargingRequestId}
+     * @allow (create) User 'user123' creates a request and sets the `userId` field to 'user123'.
+     * @allow (get) An admin can read the details of any emergency request to process it.
+     * @deny (list) A regular user tries to list all emergency requests, which could expose location data.
+     * @deny (update) User 'user456' tries to update a request made by 'user123'.
+     * @principle Enforces document ownership for writes, with admin oversight for reads and listing.
+     */
+    match /emergency_charging_requests/{emergencyChargingRequestId} {
+      allow get: if (isOwner(resource.data.userId) && resource != null) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // Note: Admins may need update access later to change the `status` field.
+      // This can be added with: `|| (isAdmin() && resource != null)`
+      allow update: if isOwner(resource.data.userId) && resource != null;
+      allow delete: if isOwner(resource.data.userId) && resource != null;
+    }
+
+    /**
+     * @description A private collection that grants admin privileges via document existence.
+     * @path /roles_admin/{userId}
+     * @allow No client operation is allowed. Access is for server-side rules logic only.
+     * @deny Any user (including admins) tries to read, list, or write to this collection from the client.
+     * @principle Secure by default. Prevents privilege escalation and admin enumeration from the client-side.
+     */
+    match /roles_admin/{userId} {
+      allow get: if false;
+      allow list: if false;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

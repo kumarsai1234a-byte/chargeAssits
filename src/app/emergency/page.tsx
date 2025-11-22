@@ -55,15 +55,16 @@ export default function EmergencyPage() {
     }
 
     setIsLoading(true);
-    const requestsRef = collection(firestore, 'emergency_charging_requests');
+    const requestsRef = collection(firestore, 'bookingRequests');
     
     addDocumentNonBlocking(requestsRef, {
         userId: user.uid,
         userName: user.displayName || user.email,
+        type: 'emergency',
         vehicleType: values.vehicleType,
         location: values.location,
-        description: values.description,
-        requestTime: serverTimestamp(),
+        message: values.description,
+        timestamp: serverTimestamp(),
         status: 'pending'
     }).then(() => {
       toast({

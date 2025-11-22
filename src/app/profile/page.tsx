@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -11,8 +10,8 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Pencil, CheckCircle, XCircle, Clock, Hourglass } from "lucide-react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, orderBy } from "firebase/firestore";
-import type { Booking } from "@/lib/data";
+import { collection, query, where, orderBy } from "firebase/firestore";
+import type { BookingRequest } from "@/lib/data";
 import { format } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from '@/lib/utils';
@@ -24,10 +23,10 @@ export default function ProfilePage() {
 
     const bookingsQuery = useMemoFirebase(() => {
         if (!user || !firestore) return null;
-        return query(collection(firestore, `users/${user.uid}/bookings`), orderBy('bookingTime', 'desc'));
+        return query(collection(firestore, 'bookingRequests'), where('userId', '==', user.uid), orderBy('timestamp', 'desc'));
     }, [user, firestore]);
 
-    const { data: bookings, isLoading: areBookingsLoading } = useCollection<Booking>(bookingsQuery);
+    const { data: bookings, isLoading: areBookingsLoading } = useCollection<BookingRequest>(bookingsQuery);
 
     const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar');
 
@@ -75,17 +74,14 @@ export default function ProfilePage() {
         return format(date, 'MMMM dd, yyyy - h:mm a');
     }
     
-    const getStatusInfo = (status: Booking['status']) => {
+    const getStatusInfo = (status: BookingRequest['status']) => {
         switch (status) {
             case 'approved':
                 return { icon: <CheckCircle className="text-accent" />, text: "Approved", className: 'bg-accent text-accent-foreground border-accent' };
-            case 'denied':
-            case 'cancelled':
-                return { icon: <XCircle className="text-destructive" />, text: status.charAt(0).toUpperCase() + status.slice(1), className: 'bg-destructive text-destructive-foreground border-destructive' };
+            case 'rejected':
+                return { icon: <XCircle className="text-destructive" />, text: 'Rejected', className: 'bg-destructive text-destructive-foreground border-destructive' };
             case 'pending':
                  return { icon: <Hourglass className="text-yellow-500" />, text: "Pending", className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' };
-            case 'completed':
-                return { icon: <Clock className="text-muted-foreground" />, text: "Completed", className: 'bg-secondary text-secondary-foreground' };
             default:
                 return { icon: <Clock className="text-muted-foreground" />, text: "Unknown", className: '' };
         }
@@ -118,8 +114,8 @@ export default function ProfilePage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="font-headline">Booking History & Status</CardTitle>
-                        <CardDescription>Check the status of your recent charging requests below. Updates from the admin will appear here.</CardDescription>
+                        <CardTitle className="font-headline">Request History & Status</CardTitle>
+                        <CardDescription>Check the status of your recent requests below. Updates from the admin will appear here in real-time.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {areBookingsLoading && (
@@ -133,6 +129,11 @@ export default function ProfilePage() {
                              <ul className="space-y-4">
                                 {bookings.map((booking, index) => {
                                     const statusInfo = getStatusInfo(booking.status);
+                                    const isBooking = booking.type === 'booking';
+                                    const title = isBooking 
+                                        ? `${booking.stationName} - Slot ${booking.slotId?.split('-')[1]}`
+                                        : `Emergency Request`;
+
                                     return (
                                         <React.Fragment key={booking.id}>
                                             <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -141,8 +142,8 @@ export default function ProfilePage() {
                                                         {statusInfo.icon}
                                                     </div>
                                                     <div>
-                                                        <p className="font-semibold">{booking.stationName} - Slot {booking.slotId.split('-')[1]}</p>
-                                                        <p className="text-sm text-muted-foreground">{formatDate(booking.bookingTime)}</p>
+                                                        <p className="font-semibold">{title}</p>
+                                                        <p className="text-sm text-muted-foreground">{formatDate(booking.timestamp)}</p>
                                                     </div>
                                                 </div>
                                                 <Badge variant="outline"
@@ -158,7 +159,7 @@ export default function ProfilePage() {
                         ) : (
                            !areBookingsLoading && 
                            <div className="text-center py-8">
-                                <p className="text-muted-foreground">You have no booking history.</p>
+                                <p className="text-muted-foreground">You have no request history.</p>
                                 <Button variant="link" asChild><Link href="/dashboard">Book a slot to get started.</Link></Button>
                            </div>
                         )}

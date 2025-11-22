@@ -1,7 +1,7 @@
-
 'use client';
 
-import { Booking, EmergencyRequest, FriendsBooking, Station, UserProfile } from "@/lib/data";
+import React from "react";
+import { BookingRequest, Station } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -12,79 +12,43 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, Phone, Car, Clock, Pin, User, ShieldCheck } from "lucide-react";
+import { Check, X, Phone, Car, Clock, Pin, User, ShieldCheck, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking, useAdmin } from "@/firebase";
-import { collection, doc, query, where, orderBy, getDoc, runTransaction, writeBatch } from "firebase/firestore";
+import { collection, doc, query, orderBy, runTransaction } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
 import { format } from 'date-fns';
-import { Separator } from "../ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import React from "react";
-
-type CombinedBooking = (FriendsBooking & { bookingSource: 'friends' }) | (Booking & { bookingSource: 'users' });
 
 export function EmergencyTab() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const { isAdmin, isCheckingAdmin } = useAdmin();
-  
-  const emergencyRequestsQuery = useMemoFirebase(() => {
+
+  const requestsQuery = useMemoFirebase(() => {
     if (!firestore || !isAdmin) return null;
-    return query(collection(firestore, 'emergency_charging_requests'), orderBy('requestTime', 'desc'));
+    return query(collection(firestore, 'bookingRequests'), orderBy('timestamp', 'desc'));
   }, [firestore, isAdmin]);
 
-  const friendsBookingsQuery = useMemoFirebase(() => {
-    if(!firestore || !isAdmin) return null;
-    return query(collection(firestore, 'friendsBookings'), where('status', '==', 'pending'), orderBy('createdAt', 'desc'));
-  }, [firestore, isAdmin]);
+  const { data: requests, isLoading } = useCollection<BookingRequest>(requestsQuery);
 
-  const userBookingsQuery = useMemoFirebase(() => {
-      if(!firestore || !isAdmin) return null;
-      return query(collection(firestore, 'bookings'), where('status', '==', 'pending'));
-  }, [firestore, isAdmin])
-
-  const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
-  const { data: friendsBookings, isLoading: friendsLoading } = useCollection<FriendsBooking>(friendsBookingsQuery);
-  const { data: userBookings, isLoading: userBookingsLoading } = useCollection<Booking>(userBookingsQuery);
-
- const combinedBookings: CombinedBooking[] = React.useMemo(() => {
-    const friendData = friendsBookings ? friendsBookings.map(b => ({ ...b, bookingSource: 'friends' as const })) : [];
-    const userData = userBookings ? userBookings.map(b => ({ ...b, name: b.userName || 'Registered User', phoneNumber: 'N/A', duration: 'N/A', type: 'standard' as const, bookingSource: 'users' as const })) : [];
-    
-    const allBookings = [...friendData, ...userData];
-
-    return allBookings.sort((a, b) => {
-        const timeA = (a as FriendsBooking).createdAt || (a as Booking).bookingTime;
-        const timeB = (b as FriendsBooking).createdAt || (b as Booking).bookingTime;
-        if (!timeA || !timeB) return 0;
-        
-        const dateA = timeA.toDate ? timeA.toDate() : new Date(timeA);
-        const dateB = timeB.toDate ? timeB.toDate() : new Date(timeB);
-
-        return dateB.getTime() - dateA.getTime();
-    });
- }, [friendsBookings, userBookings]);
-
-  const handleStatusUpdate = async (booking: CombinedBooking, newStatus: 'approved' | 'denied') => {
+  const handleStatusUpdate = async (request: BookingRequest, newStatus: 'approved' | 'rejected') => {
     if (!firestore) return;
     
-    const isUserBooking = booking.bookingSource === 'users';
-    const baseCollection = isUserBooking ? 'bookings' : 'friendsBookings';
-    const adminBookingRef = doc(firestore, baseCollection, booking.id);
+    const requestRef = doc(firestore, 'bookingRequests', request.id);
     
     try {
         await runTransaction(firestore, async (transaction) => {
-            const bookingDoc = await transaction.get(adminBookingRef);
-            if (!bookingDoc.exists()) throw "Booking document does not exist!";
+            const requestDoc = await transaction.get(requestRef);
+            if (!requestDoc.exists()) throw "Request document does not exist!";
             
-            const currentBookingData = bookingDoc.data();
-            if (currentBookingData.status !== 'pending') throw "This booking has already been processed.";
+            const currentRequestData = requestDoc.data();
+            if (currentRequestData.status !== 'pending') throw "This request has already been processed.";
 
-            if (newStatus === 'approved' && currentBookingData.type !== 'emergency') {
-                const stationId = currentBookingData.stationId || currentBookingData.chargingStationId;
-                const slotId = currentBookingData.slotId;
+            if (newStatus === 'approved' && currentRequestData.type === 'booking') {
+                const stationId = currentRequestData.stationId;
+                const slotId = currentRequestData.slotId;
                 const stationRef = doc(firestore, 'charging_stations', stationId);
 
                 const stationDoc = await transaction.get(stationRef);
@@ -102,26 +66,16 @@ export function EmergencyTab() {
                 transaction.update(stationRef, { slots: updatedSlots });
             }
             
-            // Update admin-facing booking
-            transaction.update(adminBookingRef, { status: newStatus });
-            
-            // If it's a user booking, also update their private record
-            if (isUserBooking) {
-                const userBookingRef = doc(firestore, 'users', (booking as Booking).userId, 'bookings', booking.id);
-                transaction.update(userBookingRef, { status: newStatus });
-            }
+            transaction.update(requestRef, { status: newStatus });
         });
 
-        const userNotification = booking.bookingSource === 'friends'
-            ? `Please notify ${booking.name} at ${booking.phoneNumber}.`
-            : `User will see the status update in their profile.`;
-
+        const statusText = newStatus === 'approved' ? 'Approved' : 'Rejected';
         toast({ 
-            title: `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-            description: `The request has been updated. ${userNotification}`,
+            title: `Request ${statusText}`,
+            description: `The request has been updated. The user will see the status change.`,
             variant: 'default',
             className: newStatus === 'approved' ? 'bg-accent text-accent-foreground border-accent' : 'border-primary',
-            duration: 10000,
+            duration: 8000,
         });
 
     } catch (error: any) {
@@ -129,7 +83,7 @@ export function EmergencyTab() {
         toast({
             variant: "destructive",
             title: "Operation Failed",
-            description: typeof error === 'string' ? error : "Could not update booking status.",
+            description: typeof error === 'string' ? error : "Could not update request status.",
         });
     }
   };
@@ -137,31 +91,11 @@ export function EmergencyTab() {
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return format(date, 'MMMM dd, yyyy');
+    return format(date, 'MMMM dd, yyyy - h:mm a');
   }
-
-  const isLoading = emergencyLoading || friendsLoading || userBookingsLoading;
   
   if (isCheckingAdmin) {
-    return (
-        <div className="flex flex-col gap-8">
-            <section>
-                <h2 className="text-2xl font-headline font-bold mb-4">Pending Booking Requests</h2>
-                <div className="rounded-md border p-4 space-y-4">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                </div>
-            </section>
-            <Separator />
-            <section>
-                <h2 className="text-2xl font-headline font-bold mb-4">User Emergency Requests</h2>
-                <div className="rounded-md border p-4 space-y-4">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                </div>
-            </section>
-        </div>
-    )
+    return <Skeleton className="h-64 w-full" />
   }
   
    if (!isAdmin) {
@@ -175,17 +109,61 @@ export function EmergencyTab() {
     );
   }
 
+  const pendingRequests = requests?.filter(r => r.status === 'pending') || [];
+  const processedRequests = requests?.filter(r => r.status !== 'pending') || [];
+
+  const renderRequestRows = (reqs: BookingRequest[]) => {
+    return reqs.map(request => (
+         <TableRow key={request.id}>
+             <TableCell className="font-medium">
+                 <div className="flex items-center gap-2">
+                  <User className="size-4 text-muted-foreground" />
+                  <span>{request.userName}</span>
+                 </div>
+              </TableCell>
+             <TableCell><Badge variant={request.type === 'emergency' ? 'destructive': 'secondary'}>{request.type}</Badge></TableCell>
+             <TableCell>
+                 <div className="flex flex-col gap-1 text-sm">
+                     {request.type === 'booking' && (
+                         <>
+                             <span>{request.stationName}</span>
+                             <span className="text-xs text-muted-foreground">Slot {request.slotId?.split('-')[1]}</span>
+                         </>
+                     )}
+                     {request.type === 'emergency' && (
+                         <span className="flex items-center gap-2"><Pin /> {request.location}</span>
+                     )}
+                     <span className="flex items-center gap-2"><Car /> {request.vehicleNumber || request.vehicleType}</span>
+                     {request.message && <span className="flex items-center gap-2 text-muted-foreground"><MessageSquare className="shrink-0" /> <p className="truncate italic">"{request.message}"</p></span>}
+                 </div>
+             </TableCell>
+             <TableCell>{formatDate(request.timestamp)}</TableCell>
+             <TableCell className="text-center">
+                <Badge variant="outline" className={cn({ "text-yellow-400 border-yellow-400": request.status === 'pending', "text-accent border-accent": request.status === 'approved', "text-destructive border-destructive": request.status === 'rejected', })}>{request.status}</Badge>
+             </TableCell>
+             <TableCell className="text-center">
+                 {request.status === 'pending' && (
+                     <div className="flex gap-2 justify-center">
+                         <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(request, 'approved')}><Check className="h-4 w-4" /></Button>
+                         <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(request, 'rejected')}><X className="h-4 w-4" /></Button>
+                     </div>
+                 )}
+             </TableCell>
+         </TableRow>
+     ))
+  }
+
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-2xl font-headline font-bold mb-4">Pending Booking Requests</h2>
-         <div className="hidden md:block rounded-md border">
+        <h2 className="text-2xl font-headline font-bold mb-4">Pending Requests</h2>
+         <div className="rounded-md border">
             <Table>
                 <TableHeader>
                     <TableRow>
                         <TableHead>User</TableHead>
-                        <TableHead>Details</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Details</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead className="text-center">Status</TableHead>
                         <TableHead className="text-center">Actions</TableHead>
@@ -195,151 +173,35 @@ export function EmergencyTab() {
                    {isLoading && [...Array(2)].map((_, i) => (
                        <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
                    ))}
-                   {combinedBookings.map(booking => (
-                       <TableRow key={booking.id}>
-                           <TableCell className="font-medium">
-                               <div className="flex items-center gap-2">
-                                {booking.bookingSource === 'users' ? <User className="size-4 text-muted-foreground" /> : <Phone className="size-4 text-muted-foreground" />}
-                                <span>{booking.name}</span>
-                               </div>
-                            </TableCell>
-                           <TableCell>
-                               <div className="flex flex-col gap-1 text-sm">
-                                   {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Phone /> {booking.phoneNumber}</span>}
-                                   <span className="flex items-center gap-2"><Car /> {booking.vehicleNumber}</span>
-                                   {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Clock /> {booking.duration} mins</span>}
-                                   {booking.type === 'emergency' && <span className="flex items-center gap-2"><Pin /> {booking.location}</span>}
-                               </div>
-                           </TableCell>
-                           <TableCell><Badge variant={booking.type === 'emergency' ? 'destructive': 'secondary'}>{booking.type}</Badge></TableCell>
-                           <TableCell>{formatDate((booking as FriendsBooking).createdAt || (booking as Booking).bookingTime)}</TableCell>
-                           <TableCell className="text-center"><Badge variant="outline" className="text-yellow-400 border-yellow-400">{booking.status}</Badge></TableCell>
-                           <TableCell className="text-center">
-                               {booking.status === 'pending' && (
-                                   <div className="flex gap-2 justify-center">
-                                       <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking, 'approved')}><Check className="h-4 w-4" /></Button>
-                                       <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking, 'denied')}><X className="h-4 w-4" /></Button>
-                                   </div>
-                               )}
-                           </TableCell>
-                       </TableRow>
-                   ))}
+                   {renderRequestRows(pendingRequests)}
+                   { !isLoading && pendingRequests.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No pending requests.</TableCell></TableRow>}
                 </TableBody>
             </Table>
          </div>
-         <div className="grid gap-4 md:hidden">
-            {isLoading && [...Array(2)].map((_, i) => (<Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>))}
-            {combinedBookings.map(booking => (
-                <Card key={booking.id}>
-                    <CardHeader>
-                        <CardTitle className="flex justify-between items-center">
-                             <div className="flex items-center gap-2">
-                                {booking.bookingSource === 'users' ? <User className="size-5 text-muted-foreground" /> : <Phone className="size-5 text-muted-foreground" />}
-                                <span>{booking.name}</span>
-                               </div>
-                            <Badge variant="outline" className="text-yellow-400 border-yellow-400">{booking.status}</Badge>
-                        </CardTitle>
-                        <CardDescription>{formatDate((booking as FriendsBooking).createdAt || (booking as Booking).bookingTime)}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="flex flex-col gap-2 text-sm">
-                            <Badge variant={booking.type === 'emergency' ? 'destructive': 'secondary'} className="w-fit">{booking.type}</Badge>
-                            {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Phone /> {booking.phoneNumber}</span>}
-                            <span className="flex items-center gap-2"><Car /> {booking.vehicleNumber}</span>
-                            {booking.bookingSource === 'friends' && <span className="flex items-center gap-2"><Clock /> {booking.duration} mins</span>}
-                            {booking.type === 'emergency' && <span className="flex items-center gap-2"><Pin /> {booking.location}</span>}
-                        </div>
-                        {booking.status === 'pending' && (
-                             <div className="flex gap-2 justify-end">
-                                <Button variant="outline" className="text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => handleStatusUpdate(booking, 'approved')}><Check className="mr-2 h-4 w-4" />Approve</Button>
-                                <Button variant="outline" className="text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => handleStatusUpdate(booking, 'denied')}><X className="mr-2 h-4 w-4" />Deny</Button>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            ))}
-         </div>
-         { !isLoading && combinedBookings.length === 0 && <p className="text-center text-muted-foreground py-4">No pending requests.</p>}
       </section>
 
-      <Separator />
-      
       <section>
-        <h2 className="text-2xl font-headline font-bold mb-4">User Emergency Requests</h2>
-        {/* Desktop View */}
-        <div className="hidden md:block rounded-md border">
+        <h2 className="text-2xl font-headline font-bold mb-4">Processed Requests</h2>
+        <div className="rounded-md border">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Vehicle</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
+               <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Details</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {emergencyLoading && [...Array(2)].map((_, i) => (
-                  <TableRow key={i}>
-                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-36" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                      <TableCell className="text-center"><Skeleton className="h-6 w-20 mx-auto" /></TableCell>
-                      <TableCell className="text-center"><div className="flex gap-2 justify-center"><Skeleton className="h-8 w-8" /><Skeleton className="h-8 w-8" /></div></TableCell>
-                  </TableRow>
+              {isLoading && [...Array(3)].map((_, i) => (
+                  <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
               ))}
-              {emergencyRequests?.map((request) => (
-                <TableRow key={request.id}>
-                  <TableCell className="font-medium">{request.userName}</TableCell>
-                  <TableCell>{request.location}</TableCell>
-                  <TableCell>{request.vehicleType}</TableCell>
-                  <TableCell>{formatDate(request.requestTime)}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className={cn({ "text-yellow-400 border-yellow-400": request.status === 'pending', "text-accent border-accent": request.status === 'approved', "text-red-400 border-red-400": request.status === 'denied', })}>{request.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {request.status === 'pending' ? (
-                      <div className="flex gap-2 justify-center">
-                        <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'approved' })}><Check className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'denied' })}><X className="h-4 w-4" /></Button>
-                      </div>
-                    ) : (<span>-</span>)}
-                  </TableCell>
-                </TableRow>
-              ))}
-                {!emergencyLoading && emergencyRequests?.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-4">No emergency requests.</TableCell></TableRow>}
+              {renderRequestRows(processedRequests)}
+              {!isLoading && processedRequests.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No processed requests.</TableCell></TableRow>}
             </TableBody>
           </Table>
-        </div>
-        {/* Mobile View */}
-        <div className="grid gap-4 md:hidden">
-          {emergencyLoading && [...Array(2)].map((_, i) => (<Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>))}
-          {emergencyRequests?.map((request) => (
-            <Card key={request.id}>
-              <CardHeader>
-                <CardTitle>{request.userName}</CardTitle>
-                <p className="text-sm text-muted-foreground">{request.vehicleType} - {formatDate(request.requestTime)}</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium">Location</p>
-                  <p className="text-muted-foreground">{request.location}</p>
-                </div>
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className={cn({ "text-yellow-400 border-yellow-400": request.status === 'pending', "text-accent border-accent": request.status === 'approved', "text-red-400 border-red-400": request.status === 'denied', })}>{request.status}</Badge>
-                  {request.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <Button size="icon" variant="outline" className="h-8 w-8 text-accent hover:text-accent border-accent hover:bg-accent/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'approved' })}><Check className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive border-destructive hover:bg-destructive/10" onClick={() => updateDocumentNonBlocking(doc(firestore, 'emergency_charging_requests', request.id), { status: 'denied' })}><X className="h-4 w-4" /></Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-           {!emergencyLoading && emergencyRequests?.length === 0 && <p className="text-center text-muted-foreground py-4">No emergency requests.</p>}
         </div>
       </section>
     </div>

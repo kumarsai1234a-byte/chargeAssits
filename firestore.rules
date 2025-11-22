@@ -7,47 +7,36 @@ rules_version = '2';
  * @description
  * This ruleset is designed for the ChargeAssist application, providing a secure
  * yet flexible data access layer suitable for rapid development and iteration.
+ * It is based on a centralized request model for scalability and security.
  *
  * @philosophy
  * Core Philosophy: The security model employs a hybrid approach. It uses strict,
- * path-based ownership for user-specific data (like profiles and bookings) to
- * ensure privacy. For administrative functions, it uses Database-Based Access
- * Control (DBAC), where admin privileges are granted by the existence of a
- * document in a specific roles collection. Public data, like charging stations,
- * is readable by all users to facilitate discovery.
+ * path-based ownership for user-specific data (profiles). For administrative
+ * functions, it uses Database-Based Access Control (DBAC), where admin privileges
+ * are granted by the existence of a document in a specific roles collection.
+ * Public data, like charging stations, is readable by all users to facilitate discovery.
+ * All user-generated actions (bookings, emergencies) are funneled through a
+ * single `bookingRequests` collection, which has granular access controls.
  *
  * @structure
  * Data Structure:
  * - /users/{userId} - Private user profile.
- * - /users/{userId}/bookings/{bookingId} - A user's private bookings, nested
- *   to enforce ownership.
- * - /charging_stations/{chargingStationId} - Publicly viewable charging stations,
- *   managed by admins.
- * - /emergency_charging_requests/{emergencyChargingRequestId} - Requests created
- *   by users, viewable by the creator and admins.
+ * - /charging_stations/{stationId} - Publicly viewable charging stations, managed by admins.
+ * - /bookingRequests/{requestId} - Central collection for all user-initiated requests (bookings, emergencies).
+ *   Users can create requests and read only their own. Admins have full CRUD access.
  * - /roles_admin/{userId} - A private lookup collection to designate admins.
- *   This collection should be managed securely via the Firebase Console or a
- *   trusted backend, and is not client-accessible.
  *
  * @decisions
  * Key Security Decisions:
  * - Default Deny: All paths are closed by default. Access is granted explicitly.
- * - User Data Privacy: The top-level `/users` collection cannot be listed,
- *   preventing enumeration of all application users.
+ * - User Data Privacy: The top-level `/users` collection cannot be listed.
+ * - Centralized Requests: Consolidating requests into a single collection
+ *   simplifies admin oversight and security rules.
  * - Admin Control: A dedicated `/roles_admin` collection serves as the single
- *   source of truth for administrative privileges, simplifying rules that
- *   require elevated permissions.
- * - Denormalization for Security: Documents like 'Booking' and
- *   'EmergencyChargingRequest' contain a denormalized 'userId' field. This
- *   avoids costly and complex `get()` calls in security rules, allowing for
- *   fast, direct authorization checks on the document being accessed.
- *
- * @prototyping
- * This is a PROTOTYPING ruleset. It strictly enforces *authorization* (who can
- * access what) but does not enforce data *shape* or *types*. This allows the
- * client-side application schema to evolve without requiring constant rule updates.
- * Validation is limited to fields critical for establishing ownership and
- * relational integrity.
+ *   source of truth for administrative privileges.
+ * - Denormalization for Security: Request documents contain a denormalized 'userId'
+ *   field, which is critical for writing security rules that allow users to read
+ *   only their own documents.
  */
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -56,26 +45,14 @@ service cloud.firestore {
     // Helper Functions
     // -------------------------------------------------------------------------
 
-    /**
-     * Returns true if the user is authenticated.
-     */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * Returns true if the authenticated user's UID matches the provided userId.
-     * This is the foundation of the user ownership model.
-     */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /**
-     * Checks if the authenticated user is an administrator.
-     * Admin status is granted if a document with the user's UID exists
-     * in the private /roles_admin collection.
-     */
     function isAdmin() {
       return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
     }
@@ -86,11 +63,6 @@ service cloud.firestore {
 
     /**
      * @description Manages user profile documents.
-     * @path /users/{userId}
-     * @allow (create) A newly signed-up user (uid: 'user123') creates their own profile document at `/users/user123`.
-     * @deny (get) User 'user456' tries to read the profile of 'user123'.
-     * @deny (list) Any user tries to list the entire `/users` collection.
-     * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -101,85 +73,50 @@ service cloud.firestore {
     }
 
     /**
-     * @description Manages a user's private bookings.
-     * @path /users/{userId}/bookings/{bookingId}
-     * @allow (create) User 'user123' creates a new booking at `/users/user123/bookings/booking456` with `userId: 'user123'` in the data.
-     * @deny (get) User 'user789' tries to read a booking at `/users/user123/bookings/booking456`.
-     * @deny (update) User 'user123' tries to change the `userId` field on an existing booking.
-     * @principle Enforces strict path-based ownership and relational data integrity.
-     */
-    match /users/{userId}/bookings/{bookingId} {
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isOwner(userId) && resource != null && request.resource.data.userId == resource.data.userId;
-      allow delete: if isOwner(userId) && resource != null;
-    }
-    
-    /**
-     * @description Centralized bookings collection for admin management.
-     * @path /bookings/{bookingId}
-     * @allow (create) Logged-in users can create their own bookings.
-     * @allow (read, update) Admins can read and update any booking.
-     * @deny A regular user cannot read or update another user's booking.
-     */
-    match /bookings/{bookingId} {
-        allow get, list, update, delete: if isAdmin();
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-    }
-
-     /**
-     * @description Publicly-writable collection for guest booking requests.
-     * @path /friendsBookings/{bookingId}
-     * @allow (create) Anyone can create a booking request.
-     * @allow (read, update, delete) Only admins can manage these requests.
-     * @deny A non-admin user cannot read or modify any friend booking.
-     */
-    match /friendsBookings/{bookingId} {
-        allow get, list, update, delete: if isAdmin();
-        allow create: if true;
-    }
-
-
-    /**
      * @description Manages public charging station information.
-     * @path /charging_stations/{chargingStationId}
-     * @allow (get, list) Any user, signed in or not, can read the list of charging stations.
-     * @deny (create) A non-admin user tries to create a new charging station.
-     * @principle Implements a "Public Read with Admin-Only Writes" model.
-     * @comment Force redeploy to fix permissions.
      */
-    match /charging_stations/{chargingStationId} {
+    match /charging_stations/{stationId} {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
 
     /**
-     * @description Manages user-submitted emergency charging requests.
-     * @path /emergency_charging_requests/{emergencyChargingRequestId}
-     * @allow (create) User 'user123' creates a request and sets the `userId` field to 'user123'.
-     * @allow (get) An admin can read the details of any emergency request to process it.
-     * @deny (list) A regular user tries to list all emergency requests, which could expose location data.
-     * @deny (update) User 'user456' tries to update a request made by 'user123'.
-     * @principle Enforces document ownership for writes, with admin oversight for reads and listing.
+     * @description Central collection for all booking and emergency requests.
+     * @principle Users can create their own requests and read only their own requests.
+     *            Admins can list, read, and manage all requests.
      */
-    match /emergency_charging_requests/{emergencyChargingRequestId} {
-      allow get: if (isOwner(resource.data.userId) && resource != null) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      // Note: Admins may need update access later to change the `status` field.
-      // This can be added with: `|| (isAdmin() && resource != null)`
-      allow update, delete: if (isOwner(resource.data.userId) && resource != null) || isAdmin();
+    match /bookingRequests/{requestId} {
+        // A user can create a request if they are signed in and the request's userId matches their own.
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        
+        // A user can read a request only if it belongs to them.
+        allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+        // Admins can read, update, or delete any specific request.
+        allow get, update, delete: if isAdmin();
+
+        // Only Admins can list all documents in the collection. Regular users must query by their userId.
+        allow list: if isAdmin();
     }
 
     /**
      * @description A private collection that grants admin privileges via document existence.
-     * @path /roles_admin/{userId}
-     * @allow No client operation is allowed. Access is for server-side rules logic only.
-     * @deny Any user (including admins) tries to read, list, or write to this collection from the client.
-     * @principle Secure by default. Prevents privilege escalation and admin enumeration from the client-side.
+     * @principle No client operation is allowed. Access is for server-side rules logic only.
      */
     match /roles_admin/{userId} {
       allow get, list, create, update, delete: if false;
+    }
+    
+    // Legacy collections - should be denied access if migration is complete.
+    // Kept here for reference, but access is implicitly denied.
+    match /users/{userId}/bookings/{bookingId} {
+      allow read, write: if false;
+    }
+    match /friendsBookings/{bookingId} {
+      allow read, write: if false;
+    }
+    match /emergency_charging_requests/{requestId} {
+      allow read, write: if false;
     }
   }
 }

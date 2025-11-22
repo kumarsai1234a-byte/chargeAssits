@@ -1,4 +1,3 @@
-
 // This file contains type definitions for our Firestore data structures.
 
 export type Charger = {
@@ -32,52 +31,34 @@ export type UserProfile = {
   createdAt: any; // Firestore Timestamp
 };
 
-export type EmergencyRequest = {
-  id: string;
-  userId: string;
-  userName: string;
-  location: string;
-  vehicleType: string;
-  status: 'pending' | 'approved' | 'denied';
-  requestTime: any; // Firestore Timestamp
-  description?: string;
-};
+export type BookingRequest = {
+    id: string;
+    userId: string;
+    userName: string;
+    type: 'booking' | 'emergency';
+    status: 'pending' | 'approved' | 'rejected';
+    timestamp: any; // Firestore Timestamp
+    
+    // Booking-specific fields
+    stationId?: string;
+    stationName?: string;
+    slotId?: string;
+    vehicleNumber?: string;
+
+    // Emergency-specific fields
+    location?: string;
+    vehicleType?: string;
+    message?: string;
+}
 
 export type Payment = {
   id: string;
   userId: string;
-  userName: string;
+  userName:string;
   amount: number;
   date: string;
   status: 'succeeded' | 'failed' | 'pending';
 };
-
-export type Booking = {
-    id: string;
-    userId: string;
-    userName: string;
-    chargingStationId: string;
-    stationName: string;
-    slotId: string;
-    vehicleNumber: string;
-    bookingTime: any; // Firestore Timestamp
-    status: 'pending' | 'approved' | 'denied' | 'completed' | 'cancelled';
-}
-
-export type FriendsBooking = {
-    id: string;
-    name: string;
-    phoneNumber: string;
-    vehicleNumber: string;
-    duration: string;
-    stationId: string;
-    slotId: string;
-    type: 'standard' | 'emergency';
-    status: 'pending' | 'approved' | 'denied';
-    createdAt: any; // Firestore Timestamp
-    location?: string; // Optional, only for emergency
-}
-
 
 // Mock data is no longer used for most things, but keeping one for the payments tab as an example.
 export const payments: Payment[] = [

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Bell } from "lucide-react";
@@ -6,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { collection, query, where } from "firebase/firestore";
-import type { FriendsBooking, EmergencyRequest } from "@/lib/data";
+import type { BookingRequest } from "@/lib/data";
 import { formatDistanceToNow } from 'date-fns';
 import { useAdmin } from "@/hooks/use-admin";
 
@@ -14,27 +13,21 @@ export function AdminNotifications() {
   const firestore = useFirestore();
   const { isAdmin, isCheckingAdmin } = useAdmin();
 
-  const friendsBookingsQuery = useMemoFirebase(() => {
+  const pendingRequestsQuery = useMemoFirebase(() => {
     // **FIX**: Only create the query if the user is a verified admin.
     if (!firestore || isCheckingAdmin || !isAdmin) return null;
-    return query(collection(firestore, 'friendsBookings'), where('status', '==', 'pending'));
+    return query(collection(firestore, 'bookingRequests'), where('status', '==', 'pending'));
   }, [firestore, isAdmin, isCheckingAdmin]);
 
-  const emergencyRequestsQuery = useMemoFirebase(() => {
-    // **FIX**: Only create the query if the user is a verified admin.
-    if (!firestore || isCheckingAdmin || !isAdmin) return null;
-    return query(collection(firestore, 'emergency_charging_requests'), where('status', '==', 'pending'));
-  }, [firestore, isAdmin, isCheckingAdmin]);
 
-  const { data: friendsBookings, isLoading: friendsLoading } = useCollection<FriendsBooking>(friendsBookingsQuery);
-  const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
+  const { data: pendingRequests, isLoading: requestsLoading } = useCollection<BookingRequest>(pendingRequestsQuery);
   
   // Don't show anything until we confirm user is an admin
   if (isCheckingAdmin || !isAdmin) {
       return null;
   }
 
-  const pendingCount = (friendsBookings?.length || 0) + (emergencyRequests?.length || 0);
+  const pendingCount = pendingRequests?.length || 0;
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '...';
@@ -75,16 +68,10 @@ export function AdminNotifications() {
                     <p className="font-semibold">Request</p>
                     <p className="text-right text-sm text-muted-foreground">Received</p>
                 </div>
-                {friendsBookings?.map(booking => (
-                    <div key={booking.id} className="grid grid-cols-2 items-center gap-4">
-                        <p className="truncate text-sm">{booking.name}'s booking</p>
-                        <p className="text-right text-xs text-muted-foreground">{formatDate(booking.createdAt)}</p>
-                    </div>
-                ))}
-                {emergencyRequests?.map(request => (
+                {pendingRequests?.map(request => (
                     <div key={request.id} className="grid grid-cols-2 items-center gap-4">
-                        <p className="truncate text-sm">{request.userName}'s request</p>
-                        <p className="text-right text-xs text-muted-foreground">{formatDate(request.requestTime)}</p>
+                        <p className="truncate text-sm">{request.userName}'s {request.type}</p>
+                        <p className="text-right text-xs text-muted-foreground">{formatDate(request.timestamp)}</p>
                     </div>
                 ))}
             </div>

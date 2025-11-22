@@ -23,8 +23,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import type { Station } from "@/lib/data";
-import { useFirestore, useUser, setDocumentNonBlocking } from "@/firebase";
-import { collection, serverTimestamp, doc, writeBatch } from "firebase/firestore";
+import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
+import { collection, serverTimestamp } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -60,31 +60,22 @@ export function BookingForm({ station }: { station: Station }) {
     
     setIsLoading(true);
 
-    const batch = writeBatch(firestore);
-
-    // Ref to the user's personal booking history
-    const userBookingRef = doc(collection(firestore, `users/${user.uid}/bookings`));
-
-    // Ref to the new centralized bookings collection for admin
-    const adminBookingRef = doc(collection(firestore, 'bookings'), userBookingRef.id);
+    const bookingRef = collection(firestore, 'bookingRequests');
     
     const bookingData = {
       userId: user.uid,
-      userName: user.displayName || user.email, // Add userName
-      chargingStationId: station.id,
+      userName: user.displayName || user.email,
+      type: 'booking',
+      stationId: station.id,
       stationName: station.name,
       slotId: values.slotId,
       vehicleNumber: values.vehicleNumber,
-      bookingTime: serverTimestamp(),
+      timestamp: serverTimestamp(),
       status: 'pending'
     };
 
-    // Add the booking to both locations
-    batch.set(userBookingRef, bookingData);
-    batch.set(adminBookingRef, bookingData);
-
     try {
-      await batch.commit();
+      await addDocumentNonBlocking(bookingRef, bookingData);
       toast({
         title: "Booking Request Sent!",
         description: `Your request for slot ${values.slotId.split('-')[1]} is pending admin approval.`,

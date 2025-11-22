@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -24,6 +23,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
+// This page is now a public-facing page that does not require login.
+// All requests are funneled through the `bookingRequests` collection.
+
 const bookingFormSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   phoneNumber: z.string().min(10, { message: 'Please enter a valid phone number.' }),
@@ -35,39 +37,52 @@ const emergencyFormSchema = bookingFormSchema.extend({
     location: z.string().min(10, { message: "Please provide a more detailed location." }),
 });
 
-function BookingDialog({ slot, stationId, children }: { slot: Slot, stationId: string, children: React.ReactNode }) {
+function BookingDialog({ slot, stationId, stationName, children }: { slot: Slot, stationId: string, stationName: string, children: React.ReactNode }) {
     const { toast } = useToast();
     const firestore = useFirestore();
+    const { user } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     
     const form = useForm<z.infer<typeof bookingFormSchema>>({
         resolver: zodResolver(bookingFormSchema),
         defaultValues: {
-            name: "",
+            name: user?.displayName || "",
             phoneNumber: "",
             vehicleNumber: "",
             duration: "60",
         },
     });
+    
+    // If user is logged in, pre-fill their name.
+    React.useEffect(() => {
+        if(user && isOpen) {
+            form.setValue('name', user.displayName || '');
+        }
+    }, [user, isOpen, form])
 
     async function onSubmit(values: z.infer<typeof bookingFormSchema>) {
         if (!firestore) return;
         setIsLoading(true);
 
-        const bookingsRef = collection(firestore, 'friendsBookings');
+        const bookingsRef = collection(firestore, 'bookingRequests');
         try {
             await addDocumentNonBlocking(bookingsRef, {
-                ...values,
+                userId: user?.uid || 'guest',
+                userName: values.name,
+                phoneNumber: values.phoneNumber,
+                vehicleNumber: values.vehicleNumber,
+                duration: values.duration,
                 stationId,
+                stationName,
                 slotId: slot.id,
-                type: 'standard',
+                type: 'booking',
                 status: 'pending',
-                createdAt: serverTimestamp(),
+                timestamp: serverTimestamp(),
             });
             toast({
                 title: 'Booking Request Sent!',
-                description: 'Your request for has been sent to the admin for approval.',
+                description: 'Your request has been sent for admin approval. You will be contacted via phone.',
                 variant: 'default',
                 className: 'bg-accent text-accent-foreground border-accent',
             });
@@ -122,6 +137,7 @@ function BookingDialog({ slot, stationId, children }: { slot: Slot, stationId: s
 function EmergencyBookingDialog({ stationId, children }: { stationId: string, children: React.ReactNode }) {
     const { toast } = useToast();
     const firestore = useFirestore();
+    const { user } = useUser();
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
@@ -136,23 +152,33 @@ function EmergencyBookingDialog({ stationId, children }: { stationId: string, ch
         },
     });
 
+    React.useEffect(() => {
+        if(user && isOpen) {
+            form.setValue('name', user.displayName || '');
+        }
+    }, [user, isOpen, form])
+
     async function onSubmit(values: z.infer<typeof emergencyFormSchema>) {
         if (!firestore) return;
         setIsLoading(true);
 
-        const bookingsRef = collection(firestore, 'friendsBookings');
+        const bookingsRef = collection(firestore, 'bookingRequests');
         try {
             await addDocumentNonBlocking(bookingsRef, {
-                ...values,
-                stationId,
-                slotId: 'emergency',
+                userId: user?.uid || 'guest',
+                userName: values.name,
+                phoneNumber: values.phoneNumber,
+                vehicleNumber: values.vehicleNumber,
+                vehicleType: values.vehicleNumber, // Harmonize field
+                duration: values.duration,
+                location: values.location,
                 type: 'emergency',
                 status: 'pending',
-                createdAt: serverTimestamp(),
+                timestamp: serverTimestamp(),
             });
             toast({
                 title: 'Emergency Request Sent!',
-                description: 'Your request has been sent. An admin will contact you shortly.',
+                description: 'Your request has been sent. An admin will contact you shortly via phone.',
                 variant: 'default',
                 className: 'bg-accent text-accent-foreground border-accent',
             });
@@ -209,7 +235,7 @@ function EmergencyBookingDialog({ stationId, children }: { stationId: string, ch
 
 export default function FriendsBookingPage() {
   const firestore = useFirestore();
-  const stationId = 'FVvzKSU1aPINjuU40TTI'; // Hardcoded station ID as requested implicitly
+  const stationId = 'FVvzKSU1aPINjuU40TTI'; 
 
   const stationRef = useMemoFirebase(() => {
     if (!firestore || !stationId) return null;
@@ -276,7 +302,7 @@ export default function FriendsBookingPage() {
         <Card>
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Book a Charging Slot</CardTitle>
-            <CardDescription>Select an available slot below to send a booking request to the admin.</CardDescription>
+            <CardDescription>Select an available slot below to send a booking request. You will be contacted by phone for confirmation.</CardDescription>
           </CardHeader>
           <CardContent className="grid md:grid-cols-2 gap-4">
             {station.slots?.slice(0, 2).map(slot => (
@@ -301,7 +327,7 @@ export default function FriendsBookingPage() {
                   <div className="flex items-center gap-2"><Zap className="size-4" /> {slot.charger.type}</div>
                   <div className="flex items-center gap-2"><Power className="size-4" /> {slot.charger.power}</div>
                 </div>
-                <BookingDialog slot={slot} stationId={station.id}>
+                <BookingDialog slot={slot} stationId={station.id} stationName={station.name}>
                     <Button 
                       className={cn("w-full", {
                         "bg-accent hover:bg-accent/90": slot.status === 'available',
@@ -339,4 +365,3 @@ export default function FriendsBookingPage() {
     </AppLayout>
   );
 }
-

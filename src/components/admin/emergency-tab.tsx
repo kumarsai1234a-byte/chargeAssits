@@ -46,39 +46,54 @@ export function EmergencyTab() {
 
     try {
         await runTransaction(firestore, async (transaction) => {
+            // --- ALL READS MUST COME BEFORE ALL WRITES ---
+
+            // 1. Read the booking document first.
             const bookingDoc = await transaction.get(bookingRef);
             if (!bookingDoc.exists()) {
                 throw "Booking document does not exist!";
             }
-            
             const bookingData = bookingDoc.data() as FriendsBooking;
 
-            // Update the booking status
-            transaction.update(bookingRef, { status: newStatus });
-
-            // If approved, update the station slot status
+            // 2. If approving, read the station document.
+            let stationRef, stationDoc;
             if (newStatus === 'approved' && bookingData.type === 'standard') {
-                const stationRef = doc(firestore, 'charging_stations', bookingData.stationId);
-                const stationDoc = await transaction.get(stationRef);
-
+                stationRef = doc(firestore, 'charging_stations', bookingData.stationId);
+                stationDoc = await transaction.get(stationRef);
                 if (!stationDoc.exists()) {
                     throw "Station document does not exist!";
                 }
+            }
 
-                const stationData = stationDoc.data() as Station;
+            // --- ALL VALIDATION AND LOGIC USING READ DATA ---
+
+            if (newStatus === 'approved' && bookingData.type === 'standard') {
+                const stationData = stationDoc!.data() as Station;
                 const slots = stationData.slots;
                 const slotIndex = slots.findIndex(s => s.id === bookingData.slotId);
 
-                if (slotIndex > -1) {
-                    if (slots[slotIndex].status === 'available') {
-                        slots[slotIndex].status = 'occupied';
-                        transaction.update(stationRef, { slots: slots });
-                    } else {
-                        // Slot is already taken, we should probably not approve.
-                        // For now, we'll throw to rollback the transaction.
-                        throw `Slot ${bookingData.slotId} is no longer available.`;
-                    }
+                if (slotIndex === -1) {
+                    throw `Slot ${bookingData.slotId} not found in station.`;
                 }
+
+                if (slots[slotIndex].status !== 'available') {
+                    throw `Slot ${bookingData.slotId.split('-')[1]} is no longer available.`;
+                }
+            }
+
+
+            // --- ALL WRITES AT THE END ---
+
+            // 3. Write the booking status update.
+            transaction.update(bookingRef, { status: newStatus });
+
+            // 4. If approved, write the station slot status update.
+            if (newStatus === 'approved' && bookingData.type === 'standard' && stationRef && stationDoc) {
+                const stationData = stationDoc.data() as Station;
+                const updatedSlots = stationData.slots.map(slot => 
+                    slot.id === bookingData.slotId ? { ...slot, status: 'occupied' } : slot
+                );
+                transaction.update(stationRef, { slots: updatedSlots });
             }
         });
 

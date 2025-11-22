@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from "react";
@@ -28,6 +29,7 @@ export function EmergencyTab() {
   const requestsQuery = useMemoFirebase(() => {
     // This query will only succeed if the user is an admin, per security rules.
     // We wait until the user is loaded to prevent premature queries.
+    // If we are loading or there is no user, return null to prevent the query from running.
     if (isUserLoading || !user || !firestore) return null;
     return query(collection(firestore, 'bookingRequests'), orderBy('timestamp', 'desc'));
   }, [firestore, user, isUserLoading]);
@@ -125,7 +127,6 @@ export function EmergencyTab() {
       <div className="text-destructive p-4 border border-destructive/50 rounded-md">
         <h3 className="font-bold">Access Denied</h3>
         <p className="text-sm">You do not have permission to view this data. Please contact your system administrator if you believe this is an error.</p>
-        <p className="text-xs mt-2 font-mono">{error.message}</p>
       </div>
     );
   }

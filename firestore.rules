@@ -121,6 +121,7 @@ service cloud.firestore {
      * @allow (get, list) Any user, signed in or not, can read the list of charging stations.
      * @deny (create) A non-admin user tries to create a new charging station.
      * @principle Implements a "Public Read with Admin-Only Writes" model.
+     * @comment Force redeploy to fix permissions.
      */
     match /charging_stations/{chargingStationId} {
       allow get, list: if true;

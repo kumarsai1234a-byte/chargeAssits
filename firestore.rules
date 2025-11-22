@@ -114,6 +114,19 @@ service cloud.firestore {
       allow update: if isOwner(userId) && resource != null && request.resource.data.userId == resource.data.userId;
       allow delete: if isOwner(userId) && resource != null;
     }
+    
+    /**
+     * @description Centralized bookings collection for admin management.
+     * @path /bookings/{bookingId}
+     * @allow (create) Logged-in users can create their own bookings.
+     * @allow (read, update) Admins can read and update any booking.
+     * @deny A regular user cannot read or update another user's booking.
+     */
+    match /bookings/{bookingId} {
+        allow get, list, update: if isAdmin();
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow delete: if false;
+    }
 
     /**
      * @description Manages public charging station information.

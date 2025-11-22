@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Booking, EmergencyRequest, FriendsBooking, Station, UserProfile } from "@/lib/data";
@@ -16,14 +15,14 @@ import { Check, X, Phone, Car, Clock, Pin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useCollection, useFirestore, useMemoFirebase, updateDocumentNonBlocking } from "@/firebase";
-import { collection, doc, query, where, orderBy, getDoc, runTransaction, collectionGroup } from "firebase/firestore";
+import { collection, doc, query, where, orderBy, getDoc, runTransaction, writeBatch } from "firebase/firestore";
 import { Skeleton } from "../ui/skeleton";
 import { format } from 'date-fns';
 import { Separator } from "../ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import React from "react";
 
-type CombinedBooking = (FriendsBooking & { bookingSource: 'friends' }) | (Booking & UserProfile & { bookingSource: 'users' });
+type CombinedBooking = (FriendsBooking & { bookingSource: 'friends' }) | (Booking & { bookingSource: 'users' });
 
 export function EmergencyTab() {
   const firestore = useFirestore();
@@ -41,7 +40,7 @@ export function EmergencyTab() {
 
   const userBookingsQuery = useMemoFirebase(() => {
       if(!firestore) return null;
-      return query(collectionGroup(firestore, 'bookings'), where('status', '==', 'pending'));
+      return query(collection(firestore, 'bookings'), where('status', '==', 'pending'));
   }, [firestore])
 
   const { data: emergencyRequests, isLoading: emergencyLoading } = useCollection<EmergencyRequest>(emergencyRequestsQuery);
@@ -50,15 +49,19 @@ export function EmergencyTab() {
 
  const combinedBookings: CombinedBooking[] = React.useMemo(() => {
     const friendData = friendsBookings ? friendsBookings.map(b => ({ ...b, bookingSource: 'friends' as const })) : [];
-    const userData = userBookings ? userBookings.map(b => ({ ...b, name: 'Registered User', phoneNumber: 'N/A', duration: 'N/A', type: 'standard' as const, bookingSource: 'users' as const })) : [];
+    const userData = userBookings ? userBookings.map(b => ({ ...b, name: b.userName || 'Registered User', phoneNumber: 'N/A', duration: 'N/A', type: 'standard' as const, bookingSource: 'users' as const })) : [];
     
     const allBookings = [...friendData, ...userData];
 
     return allBookings.sort((a, b) => {
-        const timeA = a.createdAt || a.bookingTime;
-        const timeB = b.createdAt || b.bookingTime;
+        const timeA = (a as FriendsBooking).createdAt || (a as Booking).bookingTime;
+        const timeB = (b as FriendsBooking).createdAt || (b as Booking).bookingTime;
         if (!timeA || !timeB) return 0;
-        return timeB.toDate() - timeA.toDate();
+        
+        const dateA = timeA.toDate ? timeA.toDate() : new Date(timeA);
+        const dateB = timeB.toDate ? timeB.toDate() : new Date(timeB);
+
+        return dateB.getTime() - dateA.getTime();
     });
  }, [friendsBookings, userBookings]);
 
@@ -66,41 +69,44 @@ export function EmergencyTab() {
     if (!firestore) return;
     
     const isUserBooking = booking.bookingSource === 'users';
-    const bookingRef = isUserBooking 
-        ? doc(firestore, 'users', (booking as Booking).userId, 'bookings', booking.id)
-        : doc(firestore, 'friendsBookings', booking.id);
-
+    const baseCollection = isUserBooking ? 'bookings' : 'friendsBookings';
+    const adminBookingRef = doc(firestore, baseCollection, booking.id);
+    
     try {
         await runTransaction(firestore, async (transaction) => {
-            const bookingDoc = await transaction.get(bookingRef);
-            if (!bookingDoc.exists()) {
-                throw "Booking document does not exist!";
-            }
+            const bookingDoc = await transaction.get(adminBookingRef);
+            if (!bookingDoc.exists()) throw "Booking document does not exist!";
             
             const currentBookingData = bookingDoc.data();
+            if (currentBookingData.status !== 'pending') throw "This booking has already been processed.";
+
             const stationId = currentBookingData.stationId || currentBookingData.chargingStationId;
             const slotId = currentBookingData.slotId;
-            
-            if (newStatus === 'approved' && currentBookingData.status === 'pending') {
-                const stationRef = doc(firestore, 'charging_stations', stationId);
-                const stationDoc = await transaction.get(stationRef);
+            const stationRef = doc(firestore, 'charging_stations', stationId);
 
-                if (!stationDoc.exists()) throw "Station document does not exist!";
-                
+            const stationDoc = await transaction.get(stationRef);
+            if (!stationDoc.exists()) throw "Station document does not exist!";
+            
+            if (newStatus === 'approved') {
                 const stationData = stationDoc.data() as Station;
                 const slotIndex = stationData.slots.findIndex(s => s.id === slotId);
-
                 if (slotIndex === -1) throw `Slot ${slotId} not found in station.`;
                 if (stationData.slots[slotIndex].status !== 'available') {
                     throw `Slot ${stationData.slots[slotIndex].id.split('-')[1]} is no longer available.`;
                 }
-
                 const updatedSlots = [...stationData.slots];
                 updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], status: 'occupied' };
                 transaction.update(stationRef, { slots: updatedSlots });
             }
             
-            transaction.update(bookingRef, { status: newStatus });
+            // Update admin-facing booking
+            transaction.update(adminBookingRef, { status: newStatus });
+            
+            // If it's a user booking, also update their private record
+            if (isUserBooking) {
+                const userBookingRef = doc(firestore, 'users', (booking as Booking).userId, 'bookings', booking.id);
+                transaction.update(userBookingRef, { status: newStatus });
+            }
         });
 
         const userNotification = booking.bookingSource === 'friends'
@@ -170,7 +176,7 @@ export function EmergencyTab() {
                                </div>
                            </TableCell>
                            <TableCell><Badge variant={booking.type === 'emergency' ? 'destructive': 'secondary'}>{booking.type}</Badge></TableCell>
-                           <TableCell>{formatDate(booking.createdAt || booking.bookingTime)}</TableCell>
+                           <TableCell>{formatDate((booking as FriendsBooking).createdAt || (booking as Booking).bookingTime)}</TableCell>
                            <TableCell className="text-center"><Badge variant="outline" className="text-yellow-400 border-yellow-400">{booking.status}</Badge></TableCell>
                            <TableCell className="text-center">
                                {booking.status === 'pending' && (
@@ -197,7 +203,7 @@ export function EmergencyTab() {
                                </div>
                             <Badge variant="outline" className="text-yellow-400 border-yellow-400">{booking.status}</Badge>
                         </CardTitle>
-                        <CardDescription>{formatDate(booking.createdAt || booking.bookingTime)}</CardDescription>
+                        <CardDescription>{formatDate((booking as FriendsBooking).createdAt || (booking as Booking).bookingTime)}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex flex-col gap-2 text-sm">

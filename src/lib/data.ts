@@ -55,6 +55,7 @@ export type Payment = {
 export type Booking = {
     id: string;
     userId: string;
+    userName: string;
     chargingStationId: string;
     stationName: string;
     slotId: string;

@@ -23,8 +23,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import type { Station } from "@/lib/data";
-import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
-import { collection, serverTimestamp } from "firebase/firestore";
+import { useFirestore, useUser, setDocumentNonBlocking } from "@/firebase";
+import { collection, serverTimestamp, doc, writeBatch } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -48,7 +48,7 @@ export function BookingForm({ station }: { station: Station }) {
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !firestore) {
       toast({
         variant: "destructive",
@@ -60,32 +60,48 @@ export function BookingForm({ station }: { station: Station }) {
     
     setIsLoading(true);
 
-    const bookingsRef = collection(firestore, `users/${user.uid}/bookings`);
-    addDocumentNonBlocking(bookingsRef, {
+    const batch = writeBatch(firestore);
+
+    // Ref to the user's personal booking history
+    const userBookingRef = doc(collection(firestore, `users/${user.uid}/bookings`));
+
+    // Ref to the new centralized bookings collection for admin
+    const adminBookingRef = doc(collection(firestore, 'bookings'), userBookingRef.id);
+    
+    const bookingData = {
       userId: user.uid,
+      userName: user.displayName || user.email, // Add userName
       chargingStationId: station.id,
       stationName: station.name,
       slotId: values.slotId,
       vehicleNumber: values.vehicleNumber,
       bookingTime: serverTimestamp(),
-      status: 'pending' // Changed from 'upcoming' to 'pending'
-    }).then(() => {
-        toast({
-          title: "Booking Request Sent!",
-          description: `Your request for slot ${values.slotId.split('-')[1]} is pending admin approval.`,
-          variant: 'default',
-          className: 'bg-accent text-accent-foreground border-accent'
-        });
-        form.reset();
-    }).catch(() => {
-        toast({
-            variant: "destructive",
-            title: "Booking Failed",
-            description: "Could not complete your booking. Please try again.",
-        });
-    }).finally(() => {
+      status: 'pending'
+    };
+
+    // Add the booking to both locations
+    batch.set(userBookingRef, bookingData);
+    batch.set(adminBookingRef, bookingData);
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Booking Request Sent!",
+        description: `Your request for slot ${values.slotId.split('-')[1]} is pending admin approval.`,
+        variant: 'default',
+        className: 'bg-accent text-accent-foreground border-accent'
+      });
+      form.reset();
+    } catch (error) {
+      console.error("Booking failed:", error);
+      toast({
+          variant: "destructive",
+          title: "Booking Failed",
+          description: "Could not complete your booking. Please try again.",
+      });
+    } finally {
         setIsLoading(false);
-    });
+    }
   }
 
   return (

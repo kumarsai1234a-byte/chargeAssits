@@ -1,4 +1,6 @@
-import { stations } from "@/lib/data";
+'use client';
+
+import type { Station } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -18,8 +20,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { collection } from "firebase/firestore";
+import { Skeleton } from "../ui/skeleton";
 
 export function StationsTab() {
+  const firestore = useFirestore();
+  const stationsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'charging_stations');
+  }, [firestore]);
+  const { data: stations, isLoading } = useCollection<Station>(stationsQuery);
+
   return (
     <div>
       <div className="flex justify-end mb-4">
@@ -40,10 +52,19 @@ export function StationsTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {stations.map((station) => {
-              const availableSlots = station.slots.filter(s => s.status === 'available').length;
-              const totalSlots = station.slots.length;
-              const isOnline = station.slots.some(s => s.status !== 'unavailable');
+            {isLoading && [...Array(3)].map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                <TableCell className="text-center"><Skeleton className="h-5 w-16 mx-auto" /></TableCell>
+                <TableCell className="text-center"><Skeleton className="h-6 w-20 mx-auto" /></TableCell>
+                <TableCell><div className="flex justify-end"><Skeleton className="h-8 w-8" /></div></TableCell>
+              </TableRow>
+            ))}
+            {stations?.map((station) => {
+              const availableSlots = station.slots?.filter(s => s.status === 'available').length || 0;
+              const totalSlots = station.slots?.length || 0;
+              const isOnline = station.slots?.some(s => s.status !== 'unavailable');
 
               return (
                 <TableRow key={station.id}>
@@ -79,10 +100,30 @@ export function StationsTab() {
 
       {/* Mobile View */}
       <div className="grid gap-4 md:hidden">
-        {stations.map((station) => {
-          const availableSlots = station.slots.filter(s => s.status === 'available').length;
-          const totalSlots = station.slots.length;
-          const isOnline = station.slots.some(s => s.status !== 'unavailable');
+         {isLoading && [...Array(3)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <Skeleton className="h-6 w-40 mb-1" />
+                        <Skeleton className="h-4 w-48" />
+                    </div>
+                    <Skeleton className="size-8" />
+                </div>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <div>
+                  <Skeleton className="h-4 w-20 mb-1" />
+                  <Skeleton className="h-6 w-16" />
+                </div>
+                <Skeleton className="h-6 w-20" />
+              </CardContent>
+            </Card>
+        ))}
+        {stations?.map((station) => {
+          const availableSlots = station.slots?.filter(s => s.status === 'available').length || 0;
+          const totalSlots = station.slots?.length || 0;
+          const isOnline = station.slots?.some(s => s.status !== 'unavailable');
           
           return (
             <Card key={station.id}>

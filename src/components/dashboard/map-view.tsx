@@ -7,8 +7,9 @@ import Link from "next/link";
 import { Fuel } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export function MapView({ stations }: { stations: Station[] }) {
+export function MapView({ stations, isLoading }: { stations: Station[], isLoading: boolean }) {
   const mapBg = PlaceHolderImages.find(p => p.id === 'map-background');
 
   const latToPercent = (lat: number) => ((40.8 - lat) / (40.8 - 40.7)) * 100;
@@ -16,7 +17,8 @@ export function MapView({ stations }: { stations: Station[] }) {
 
   return (
     <div className="relative w-full h-[600px] rounded-lg overflow-hidden">
-      {mapBg && (
+      {isLoading && <Skeleton className="w-full h-full" />}
+      {mapBg && !isLoading && (
         <Image
           src={mapBg.imageUrl}
           alt={mapBg.description}
@@ -27,8 +29,8 @@ export function MapView({ stations }: { stations: Station[] }) {
       )}
       <div className="absolute inset-0 bg-black/40" />
 
-      {stations.map(station => {
-        const availableSlots = station.slots.filter(s => s.status === 'available').length > 0;
+      {!isLoading && stations.map(station => {
+        const availableSlots = station.slots?.filter(s => s.status === 'available').length > 0;
         const top = latToPercent(station.location.lat);
         const left = lngToPercent(station.location.lng);
 
@@ -54,7 +56,7 @@ export function MapView({ stations }: { stations: Station[] }) {
             </TooltipTrigger>
             <TooltipContent>
               <p className="font-bold">{station.name}</p>
-              <p className="text-sm text-muted-foreground">{station.slots.filter(s => s.status === 'available').length} available slots</p>
+              <p className="text-sm text-muted-foreground">{station.slots?.filter(s => s.status === 'available').length || 0} available slots</p>
             </TooltipContent>
           </Tooltip>
         );

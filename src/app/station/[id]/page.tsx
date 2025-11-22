@@ -1,23 +1,76 @@
+'use client';
+
 import { AppLayout } from "@/components/layout/app-layout";
-import { stations, Station } from "@/lib/data";
+import type { Station } from "@/lib/data";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookingForm } from "@/components/booking-form";
-import { Zap, Plug, Power, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Zap, Plug, Power } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
+import { doc } from "firebase/firestore";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StationDetailPage({ params }: { params: { id: string } }) {
-  const station = stations.find(s => s.id === params.id);
+  const firestore = useFirestore();
+  const stationRef = useMemoFirebase(() => {
+    if (!firestore || !params.id) return null;
+    return doc(firestore, 'charging_stations', params.id);
+  }, [firestore, params.id]);
+  const { data: station, isLoading } = useDoc<Station>(stationRef);
+
+  if (isLoading) {
+    return (
+        <AppLayout>
+            <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                    <Card className="overflow-hidden">
+                        <Skeleton className="w-full h-80" />
+                        <CardHeader>
+                            <Skeleton className="h-8 w-3/4 mb-2" />
+                            <Skeleton className="h-5 w-full" />
+                        </CardHeader>
+                        <CardContent>
+                            <Skeleton className="h-8 w-32" />
+                        </CardContent>
+                    </Card>
+                    <Card className="mt-8">
+                        <CardHeader>
+                            <Skeleton className="h-8 w-1/2" />
+                        </CardHeader>
+                        <CardContent className="grid md:grid-cols-2 gap-4">
+                            {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+                        </CardContent>
+                    </Card>
+                </div>
+                <div>
+                    <Card>
+                         <CardHeader>
+                            <Skeleton className="h-8 w-1/2 mb-2" />
+                            <Skeleton className="h-5 w-full" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-8">
+                                {[...Array(4)].map((_, i) => <div key={i} className="space-y-2"><Skeleton className="h-5 w-24" /><Skeleton className="h-10 w-full" /></div>)}
+                                <Skeleton className="h-12 w-full" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </AppLayout>
+    )
+  }
 
   if (!station) {
     notFound();
   }
 
   const stationImage = PlaceHolderImages.find(p => p.id === station.image);
-  const availableSlots = station.slots.filter(s => s.status === 'available').length;
+  const availableSlots = station.slots?.filter(s => s.status === 'available').length || 0;
 
   return (
     <AppLayout>
@@ -41,7 +94,7 @@ export default function StationDetailPage({ params }: { params: { id: string } }
             </CardHeader>
             <CardContent>
               <Badge variant={availableSlots > 0 ? 'default' : 'destructive'} className="bg-accent text-accent-foreground text-base">
-                {availableSlots} / {station.slots.length} slots available
+                {availableSlots} / {station.slots?.length || 0} slots available
               </Badge>
             </CardContent>
           </Card>
@@ -51,7 +104,7 @@ export default function StationDetailPage({ params }: { params: { id: string } }
               <CardTitle className="font-headline text-2xl">Available Slots</CardTitle>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 gap-4">
-              {station.slots.map(slot => (
+              {station.slots?.map(slot => (
                 <Card key={slot.id} className={cn("p-4 flex flex-col gap-2", {
                   "bg-muted/30 border-dashed": slot.status === "unavailable",
                   "border-destructive/50": slot.status === "occupied"

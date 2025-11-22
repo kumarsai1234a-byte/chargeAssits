@@ -15,9 +15,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AuthLayout } from "@/components/layout/auth-layout"
 import { useAuth, useFirestore, setDocumentNonBlocking } from "@/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
-import { doc } from "firebase/firestore";
+import { doc, serverTimestamp } from "firebase/firestore";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -31,9 +31,17 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth || !firestore) {
+        toast({ variant: "destructive", title: "Firebase not initialized."});
+        return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+
+      // Update user profile
+      await updateProfile(user, { displayName: fullName });
 
       // Create user document in Firestore
       const userRef = doc(firestore, "users", user.uid);
@@ -41,7 +49,7 @@ export default function SignupPage() {
         id: user.uid,
         name: fullName,
         email: user.email,
-        phoneNumber: user.phoneNumber || "",
+        createdAt: serverTimestamp(),
       };
       
       setDocumentNonBlocking(userRef, userData, { merge: true });
@@ -84,8 +92,7 @@ export default function SignupPage() {
                 />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
+              <Label htmlFor="email">Email</Label>              <Input
                 id="email"
                 type="email"
                 placeholder="m@example.com"

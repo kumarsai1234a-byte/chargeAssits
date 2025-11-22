@@ -18,10 +18,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFirestore, useUser, addDocumentNonBlocking } from "@/firebase";
+import { collection, serverTimestamp } from "firebase/firestore";
 
 const emergencyFormSchema = z.object({
-  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Invalid phone number."),
   vehicle: z.string().min(3, { message: "Vehicle details must be at least 3 characters." }),
   location: z.string().min(10, { message: "Please provide a more detailed location." }),
   description: z.string().optional(),
@@ -29,12 +29,12 @@ const emergencyFormSchema = z.object({
 
 export default function EmergencyPage() {
   const { toast } = useToast();
+  const firestore = useFirestore();
+  const { user } = useUser();
 
   const form = useForm<z.infer<typeof emergencyFormSchema>>({
     resolver: zodResolver(emergencyFormSchema),
     defaultValues: {
-      name: "",
-      phone: "",
       vehicle: "",
       location: "",
       description: "",
@@ -42,7 +42,26 @@ export default function EmergencyPage() {
   });
 
   function onSubmit(values: z.infer<typeof emergencyFormSchema>) {
-    console.log(values);
+    if (!user || !firestore) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "You must be logged in to make a request.",
+      });
+      return;
+    }
+
+    const requestsRef = collection(firestore, 'emergency_charging_requests');
+    addDocumentNonBlocking(requestsRef, {
+        userId: user.uid,
+        userName: user.displayName || user.email,
+        vehicle: values.vehicle,
+        location: values.location,
+        description: values.description,
+        requestTime: serverTimestamp(),
+        status: 'pending'
+    });
+
     toast({
       title: "Emergency Request Sent",
       description: "Our team will review your request and contact you shortly.",
@@ -64,34 +83,6 @@ export default function EmergencyPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <div className="grid md:grid-cols-2 gap-8">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John Doe" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="+1 234 567 890" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <FormField
                 control={form.control}
                 name="vehicle"

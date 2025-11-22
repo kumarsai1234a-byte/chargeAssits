@@ -14,6 +14,7 @@ import { collection, query, orderBy } from "firebase/firestore";
 import type { Booking } from "@/lib/data";
 import { format } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from '@/lib/utils';
 
 export default function ProfilePage() {
     const { user, isUserLoading } = useUser();
@@ -100,7 +101,7 @@ export default function ProfilePage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline">Booking History</CardTitle>
-                        <CardDescription>Your recent charging sessions.</CardDescription>
+                        <CardDescription>Check the status of your recent charging sessions below.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {areBookingsLoading && (
@@ -120,7 +121,13 @@ export default function ProfilePage() {
                                                 <p className="text-sm text-muted-foreground">{formatDate(booking.bookingTime)}</p>
                                             </div>
                                             <div className="text-left sm:text-right">
-                                                <Badge>{booking.status}</Badge>
+                                                <Badge variant={booking.status === 'upcoming' ? 'default' : booking.status === 'cancelled' ? 'destructive' : 'secondary'}
+                                                    className={cn({
+                                                        'bg-accent text-accent-foreground': booking.status === 'upcoming',
+                                                        'bg-destructive text-destructive-foreground': booking.status === 'cancelled',
+                                                    })}>
+                                                    {booking.status}
+                                                </Badge>
                                             </div>
                                         </li>
                                         {index < bookings.length - 1 && <Separator />}

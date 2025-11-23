@@ -5,41 +5,15 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlaceHolderImages } from "@/lib/placeholder-images";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Pencil, CheckCircle, XCircle, Clock, Hourglass } from "lucide-react";
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { collection, query, where, orderBy } from "firebase/firestore";
-import type { BookingRequest } from "@/lib/data";
+import { Pencil } from "lucide-react";
+import { useUser } from "@/firebase";
 import { format } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from '@/lib/utils';
-import Link from 'next/link';
 
 export default function ProfilePage() {
     const { user, isUserLoading } = useUser();
-    const firestore = useFirestore();
 
-    const bookingsQuery = useMemoFirebase(() => {
-        // If the user is not loaded or doesn't exist, the query is null.
-        if (!user || !firestore) return null;
-        
-        // This query is now correct and secure. It only fetches documents
-        // where the `userId` field matches the currently logged-in user's UID.
-        // This is allowed by the security rules.
-        return query(
-          collection(firestore, 'bookingRequests'), 
-          where('userId', '==', user.uid), 
-          orderBy('timestamp', 'desc')
-        );
-    }, [user, firestore]);
-
-    const { data: bookings, isLoading: areBookingsLoading } = useCollection<BookingRequest>(bookingsQuery);
-
-    const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar');
-
-    if (isUserLoading || (areBookingsLoading && !bookings)) {
+    if (isUserLoading) {
         return (
             <AppLayout>
                  <div className="space-y-6">
@@ -59,19 +33,6 @@ export default function ProfilePage() {
                             </div>
                         </CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader>
-                            <Skeleton className="h-8 w-56" />
-                            <Skeleton className="h-5 w-full" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                {[...Array(3)].map((_, i) => (
-                                    <div key={i}><Skeleton className="h-12 w-full" /><Separator className="my-4"/></div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
                  </div>
             </AppLayout>
         )
@@ -81,26 +42,7 @@ export default function ProfilePage() {
     if (!user) {
         return null;
     }
-
-    const formatDate = (timestamp: any) => {
-        if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return format(date, 'MMMM dd, yyyy - h:mm a');
-    }
     
-    const getStatusInfo = (status: BookingRequest['status']) => {
-        switch (status) {
-            case 'approved':
-                return { icon: <CheckCircle className="text-accent" />, text: "Approved", className: 'bg-accent text-accent-foreground border-accent' };
-            case 'rejected':
-                return { icon: <XCircle className="text-destructive" />, text: 'Rejected', className: 'bg-destructive text-destructive-foreground border-destructive' };
-            case 'pending':
-                 return { icon: <Hourglass className="text-yellow-500" />, text: "Pending", className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' };
-            default:
-                return { icon: <Clock className="text-muted-foreground" />, text: "Unknown", className: '' };
-        }
-    }
-
     return (
         <AppLayout>
             <div className="space-y-6">
@@ -112,7 +54,7 @@ export default function ProfilePage() {
                     <CardContent className="pt-6">
                         <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
                             <Avatar className="w-24 h-24">
-                                {userAvatar && <AvatarImage src={user.photoURL || userAvatar.imageUrl} alt="User" />}
+                                {user.photoURL && <AvatarImage src={user.photoURL} alt="User" />}
                                 <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                             </Avatar>
                             <div className="space-y-1">
@@ -123,60 +65,6 @@ export default function ProfilePage() {
                                 </p>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline">Request History & Status</CardTitle>
-                        <CardDescription>Check the status of your recent requests below. Updates from the admin will appear here in real-time.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {areBookingsLoading && (
-                            <ul className="space-y-4">
-                                {[...Array(3)].map((_, i) => (
-                                    <li key={i}><Skeleton className="h-12 w-full" /><Separator className="my-4"/></li>
-                                ))}
-                            </ul>
-                        )}
-                        {!areBookingsLoading && bookings && bookings.length > 0 ? (
-                             <ul className="space-y-4">
-                                {bookings.map((booking, index) => {
-                                    const statusInfo = getStatusInfo(booking.status);
-                                    const isBooking = booking.type === 'booking';
-                                    const title = isBooking 
-                                        ? `${booking.stationName} - Slot ${booking.slotId?.split('-')[1]}`
-                                        : `Emergency Request`;
-
-                                    return (
-                                        <React.Fragment key={booking.id}>
-                                            <li className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="hidden sm:block">
-                                                        {statusInfo.icon}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold">{title}</p>
-                                                        <p className="text-sm text-muted-foreground">{formatDate(booking.timestamp)}</p>
-                                                    </div>
-                                                </div>
-                                                <Badge variant="outline"
-                                                    className={cn('w-full sm:w-auto justify-center', statusInfo.className)}>
-                                                    {statusInfo.text}
-                                                </Badge>
-                                            </li>
-                                            {index < bookings.length - 1 && <Separator />}
-                                        </React.Fragment>
-                                    )
-                                })}
-                            </ul>
-                        ) : (
-                           !areBookingsLoading && 
-                           <div className="text-center py-8">
-                                <p className="text-muted-foreground">You have no request history.</p>
-                                <Button variant="link" asChild><Link href="/dashboard">Book a slot to get started.</Link></Button>
-                           </div>
-                        )}
                     </CardContent>
                 </Card>
             </div>

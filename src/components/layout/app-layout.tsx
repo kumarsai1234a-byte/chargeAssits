@@ -23,7 +23,6 @@ import { LayoutGrid, User, LogOut, ZapIcon, ShieldAlert } from 'lucide-react';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: <LayoutGrid /> },
   { href: '/profile', label: 'Profile', icon: <User /> },
-  { href: '/emergency', label: 'Emergency', icon: <ShieldAlert /> },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -84,7 +83,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuItem>
             ))}
-            {/* The Admin Panel link is removed. Admins will navigate directly. */}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
